@@ -14,25 +14,41 @@ const ctx: CanvasRenderingContext2D = context;
 // 再细时，4 倍多重采样会漏掉落在采样点之间的竖边。
 const outputScale = 2;
 
-fitCanvas();
-
-// 参数
 const hexagonAngle = Math.PI / 6; // 30 degrees in radians
 const sideLength = 64;
-const boardWidth = 100;
-const boardHeight = 100;
-
 const hexHeight = Math.sin(hexagonAngle) * sideLength;
 const hexRadius = Math.cos(hexagonAngle) * sideLength;
 const hexRectangleHeight = sideLength + 2 * hexHeight;
 const hexRectangleWidth = 2 * hexRadius;
+const rowStep = sideLength + hexHeight;
 
-// 开始动画
-render();
+const CHUNK_SIZE = 16;
 
-// 监听鼠标位置
-canvas.addEventListener("mousemove", onMouseMove);
+type Chunk = {
+  col: number;
+  row: number;
+};
+
+type Hex = {
+  col: number;
+  row: number;
+};
+
+const chunks = new Map<string, Chunk>();
+const camera = { x: 0, y: 0 };
+let hover: Hex | null = null;
+let pointer: { id: number; x: number; y: number } | null = null;
+
+canvas.style.touchAction = "none";
+canvas.addEventListener("pointerdown", onPointerDown);
+canvas.addEventListener("pointermove", onPointerMove);
+canvas.addEventListener("pointerup", onPointerUp);
+canvas.addEventListener("pointercancel", onPointerUp);
 window.addEventListener("resize", onResize);
+
+fitCanvas();
+syncChunks();
+render();
 
 function fitCanvas(): void {
   const width = window.innerWidth;
@@ -41,34 +57,115 @@ function fitCanvas(): void {
   canvas.height = height * outputScale;
   canvas.style.width = width + "px";
   canvas.style.height = height + "px";
-  ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 }
 
 function onResize(): void {
   fitCanvas();
+  syncChunks();
   render();
 }
 
-function onMouseMove(event: MouseEvent): void {
-  const x = event.offsetX;
-  const y = event.offsetY;
-  const { col: hexX, row: hexY } = pixelToHex(x, y);
-  const screenX = hexX * hexRectangleWidth + (hexY % 2) * hexRadius;
-  const screenY = hexY * (hexHeight + sideLength);
+function onPointerDown(event: PointerEvent): void {
+  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  canvas.setPointerCapture(event.pointerId);
+  canvas.style.cursor = "grabbing";
+}
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function onPointerMove(event: PointerEvent): void {
+  if (pointer && pointer.id === event.pointerId) {
+    camera.x -= event.clientX - pointer.x;
+    camera.y -= event.clientY - pointer.y;
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+    syncChunks();
+  }
+  hover = pixelToHex(event.offsetX + camera.x, event.offsetY + camera.y);
+  render();
+}
 
-  drawBoard(boardWidth, boardHeight);
+function onPointerUp(event: PointerEvent): void {
+  if (!pointer || pointer.id !== event.pointerId) return;
+  pointer = null;
+  canvas.style.cursor = "default";
+}
 
-  // Check if the mouse's coords are on the board
-  if (hexX >= 0 && hexX < boardWidth && hexY >= 0 && hexY < boardHeight) {
-    ctx.fillStyle = "#333333";
-    drawHexagon(screenX, screenY, true);
-    drawPoint(screenX + hexRectangleWidth / 2, screenY + sideLength, hexHeight);
+function chunkKey(col: number, row: number): string {
+  return `${col},${row}`;
+}
+
+function generateChunk(col: number, row: number): Chunk {
+  return { col, row };
+}
+
+function visibleHexBounds(): { col0: number; col1: number; row0: number; row1: number } {
+  const viewW = window.innerWidth;
+  const viewH = window.innerHeight;
+  return {
+    col0: Math.floor((camera.x - hexRectangleWidth) / hexRectangleWidth) - 1,
+    col1: Math.ceil((camera.x + viewW) / hexRectangleWidth) + 1,
+    row0: Math.floor((camera.y - hexRectangleHeight) / rowStep) - 1,
+    row1: Math.ceil((camera.y + viewH) / rowStep) + 1,
+  };
+}
+
+function syncChunks(): void {
+  const { col0, col1, row0, row1 } = visibleHexBounds();
+  const chunkCol0 = Math.floor(col0 / CHUNK_SIZE) - 1;
+  const chunkCol1 = Math.floor(col1 / CHUNK_SIZE) + 1;
+  const chunkRow0 = Math.floor(row0 / CHUNK_SIZE) - 1;
+  const chunkRow1 = Math.floor(row1 / CHUNK_SIZE) + 1;
+  const keep = new Set<string>();
+
+  for (let row = chunkRow0; row <= chunkRow1; row++) {
+    for (let col = chunkCol0; col <= chunkCol1; col++) {
+      const key = chunkKey(col, row);
+      keep.add(key);
+      if (!chunks.has(key)) chunks.set(key, generateChunk(col, row));
+    }
+  }
+
+  for (const key of chunks.keys()) {
+    if (!keep.has(key)) chunks.delete(key);
   }
 }
 
-function pixelToHex(x: number, y: number): { col: number; row: number } {
+function hexIntersectsView(col: number, row: number): boolean {
+  const { x, y } = hexOrigin(col, row);
+  return (
+    x < camera.x + window.innerWidth &&
+    x + hexRectangleWidth > camera.x &&
+    y < camera.y + window.innerHeight &&
+    y + hexRectangleHeight > camera.y
+  );
+}
+
+function render(): void {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.translate(-camera.x, -camera.y);
+
+  for (const chunk of chunks.values()) {
+    const col0 = chunk.col * CHUNK_SIZE;
+    const row0 = chunk.row * CHUNK_SIZE;
+    for (let row = row0; row < row0 + CHUNK_SIZE; row++) {
+      for (let col = col0; col < col0 + CHUNK_SIZE; col++) {
+        if (!hexIntersectsView(col, row)) continue;
+        const { x, y } = hexOrigin(col, row);
+        drawHexagon(x, y, false);
+      }
+    }
+  }
+
+  if (hover) {
+    const { x, y } = hexOrigin(hover.col, hover.row);
+    ctx.fillStyle = "#333333";
+    drawHexagon(x, y, true);
+  }
+}
+
+function pixelToHex(x: number, y: number): Hex {
   const px = x - hexRadius;
   const py = y - hexRectangleHeight / 2;
   const q = ((Math.sqrt(3) / 3) * px - py / 3) / sideLength;
@@ -99,27 +196,12 @@ function cubeRound(q: number, r: number): { q: number; r: number } {
   return { q: rq, r: rr };
 }
 
-function drawPoint(x: number, y: number, radian = 3): void {
-  ctx.beginPath();
-  ctx.arc(x, y, radian, 0, 2 * Math.PI);
-  ctx.fillStyle = "#FFF";
-  ctx.strokeStyle = "#333";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fill();
-  ctx.closePath();
-}
-
-function drawBoard(width: number, height: number): void {
-  for (let i = 0; i < width; ++i) {
-    for (let j = 0; j < height; ++j) {
-      drawHexagon(
-        i * hexRectangleWidth + (j % 2) * hexRadius,
-        j * (sideLength + hexHeight),
-        false,
-      );
-    }
-  }
+function hexOrigin(col: number, row: number): { x: number; y: number } {
+  const parity = ((row % 2) + 2) % 2;
+  return {
+    x: col * hexRectangleWidth + parity * hexRadius,
+    y: row * rowStep,
+  };
 }
 
 function drawHexagon(x: number, y: number, fill = true): void {
@@ -139,8 +221,4 @@ function drawHexagon(x: number, y: number, fill = true): void {
   } else {
     ctx.stroke();
   }
-}
-
-function render(): void {
-  drawBoard(boardWidth, boardHeight);
 }
