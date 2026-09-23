@@ -1,11 +1,8 @@
-import {
-  drawHexIcon,
-  ICON_CYCLE,
-  iconReady,
-  iconUrl,
-  iconsEqual,
-  type HexIcon,
-} from "./icons";
+import { drawPlacedCell, openPlacedMenu, placedCellAt, placedCells, startCells } from "./cells/board";
+import { mountTranscript } from "./transcript/TranscriptView";
+import "./app.css";
+import { beginFrame, popScale, pumpPops } from "./cells/pop";
+import { drawHexIcon, ICON_CYCLE, iconReady, iconsEqual, type HexIcon } from "./icons";
 
 const canvasEl = document.querySelector<HTMLCanvasElement>("#app");
 if (!canvasEl) {
@@ -67,13 +64,8 @@ type Pointer = {
 const STORAGE_KEY = "hexagonal-canvas.hex-states";
 const CAMERA_KEY = "hexagonal-canvas.camera";
 
-const POP_MS = 900;
-
 const chunks = new Map<string, Chunk>();
 const hexStates = new Map<string, HexState>();
-const iconPops = new Map<string, number>();
-let popFrame = 0;
-let iconPopping = false;
 const heldPanKeys = new Set<string>();
 let panFrame = 0;
 let lastPanTime = 0;
@@ -84,20 +76,16 @@ const camera = { x: 0, y: 0, zoom: 1 };
 const selection = new Map<string, Hex>();
 let hover: Hex | null = null;
 let pointer: Pointer | null = null;
-let menuHex: Hex | null = null;
 let suppressClick = false;
 
+
 const menuRoot = document.querySelector<HTMLElement>("#hex-menu");
-const menuIdNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-id");
-const menuIconsNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-icons");
-if (!menuRoot || !menuIdNode || !menuIconsNode) {
+const menuTranscriptNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-transcript");
+if (!menuRoot || !menuTranscriptNode) {
   throw new Error("Missing hex menu");
 }
 const menu: HTMLElement = menuRoot;
-const menuId: HTMLElement = menuIdNode;
-const menuIcons: HTMLElement = menuIconsNode;
-
-buildMenu();
+const menuTranscript: HTMLElement = menuTranscriptNode;
 canvas.style.touchAction = "none";
 canvas.addEventListener("contextmenu", onContextMenu);
 canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -106,7 +94,6 @@ canvas.addEventListener("pointermove", onPointerMove);
 canvas.addEventListener("pointerup", onPointerUp);
 canvas.addEventListener("pointercancel", onPointerCancel);
 menu.addEventListener("pointerdown", (event) => event.stopPropagation());
-menu.addEventListener("click", onMenuClick);
 document.addEventListener("pointerdown", onDocumentPointerDown);
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", onKeyUp);
@@ -118,6 +105,7 @@ loadCamera();
 fitCanvas();
 syncChunks();
 render();
+startCells(() => render());
 
 function fitCanvas(): void {
   const width = window.innerWidth;
@@ -135,51 +123,26 @@ function onResize(): void {
   render();
 }
 
-function buildMenu(): void {
-  for (const icon of ICON_CYCLE) {
-    if (!icon) continue;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.kind = icon.kind;
-    button.dataset.value = icon.kind === "lobe" ? icon.slug : icon.emoji;
-    button.setAttribute("role", "menuitemradio");
-    button.setAttribute("aria-checked", "false");
-    button.setAttribute("aria-label", icon.kind === "lobe" ? icon.slug : icon.emoji);
-    const image = document.createElement("img");
-    image.alt = "";
-    image.src = iconUrl(icon);
-    button.append(image);
-    menuIcons.append(button);
-  }
-}
-
-function menuIconOf(button: HTMLButtonElement): HexIcon | null {
-  const kind = button.dataset.kind;
-  const value = button.dataset.value;
-  return (
-    ICON_CYCLE.find(
-      (icon) =>
-        icon !== null &&
-        ((icon.kind === "lobe" && kind === "lobe" && icon.slug === value) ||
-          (icon.kind === "emoji" && kind === "emoji" && icon.emoji === value)),
-    ) ?? null
-  );
-}
-
 function onContextMenu(event: MouseEvent): void {
   event.preventDefault();
   const world = screenToWorld(event.offsetX, event.offsetY);
   const hex = pixelToHex(world.x, world.y);
+  if (!placedCellAt(hex.col, hex.row)) {
+    closeMenu();
+    return;
+  }
   openMenu(hex, event.clientX, event.clientY);
 }
 
 function openMenu(hex: Hex, x: number, y: number): void {
-  menuHex = hex;
-  menuId.textContent = hexId(hex.col, hex.row);
-  const current = hexState(hex.col, hex.row).icon;
-  for (const button of menuIcons.querySelectorAll("button")) {
-    const icon = menuIconOf(button);
-    button.setAttribute("aria-checked", iconsEqual(icon, current) ? "true" : "false");
+  menuTranscript.hidden = true;
+  const placed = placedCellAt(hex.col, hex.row);
+  if (placed) {
+    openPlacedMenu(placed, {
+      showTranscript(sessionId) {
+        showTranscript(sessionId);
+      },
+    });
   }
   menu.hidden = false;
   menu.style.left = `${x}px`;
@@ -195,18 +158,19 @@ function openMenu(hex: Hex, x: number, y: number): void {
 }
 
 function closeMenu(): void {
-  menuHex = null;
   menu.hidden = true;
+  menuTranscript.hidden = true;
+  mountTranscript(menuTranscript, null);
 }
 
-function onMenuClick(event: MouseEvent): void {
-  const button = (event.target as Element | null)?.closest("button");
-  if (!button || !menuHex) return;
-  const icon = button.dataset.action === "clear" ? null : menuIconOf(button);
-  if (button.dataset.action !== "clear" && !icon) return;
-  writeHexState(menuHex.col, menuHex.row, icon);
-  closeMenu();
-  render();
+function showTranscript(sessionId: string): void {
+  if (!sessionId) {
+    menuTranscript.hidden = true;
+    mountTranscript(menuTranscript, null);
+    return;
+  }
+  menuTranscript.hidden = false;
+  mountTranscript(menuTranscript, sessionId);
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
@@ -361,11 +325,7 @@ function onPointerUp(event: PointerEvent): void {
       else selection.set(id, { col, row });
     }
     render();
-    return;
   }
-  if (moved) return;
-  cycleHex(col, row);
-  render();
 }
 
 function onPointerCancel(event: PointerEvent): void {
@@ -410,11 +370,6 @@ function loadHexStates(): void {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
-}
-
-function saveHexStates(): void {
-  const payload = [...hexStates.values()];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
 function loadCamera(): void {
@@ -464,46 +419,12 @@ function onWheel(event: WheelEvent): void {
   render();
 }
 
-function chunkIndex(value: number): number {
-  return Math.floor(value / CHUNK_SIZE);
-}
-
-function localIndex(value: number): number {
-  return value - chunkIndex(value) * CHUNK_SIZE;
-}
-
 function defaultHexState(col: number, row: number): HexState {
   return { id: hexId(col, row), col, row, marked: false, icon: null };
 }
 
 function hexState(col: number, row: number): HexState {
   return hexStates.get(hexId(col, row)) ?? defaultHexState(col, row);
-}
-
-function writeHexState(col: number, row: number, icon: HexIcon | null): void {
-  const id = hexId(col, row);
-  const state = { id, col, row, marked: icon !== null, icon };
-  if (icon) {
-    hexStates.set(id, state);
-    iconPops.set(id, -1);
-  } else {
-    hexStates.delete(id);
-    iconPops.delete(id);
-  }
-  saveHexStates();
-
-  const chunk = chunks.get(chunkKey(chunkIndex(col), chunkIndex(row)));
-  if (!chunk) return;
-  chunk.cells[localIndex(row) * CHUNK_SIZE + localIndex(col)] = icon
-    ? state
-    : defaultHexState(col, row);
-}
-
-function cycleHex(col: number, row: number): void {
-  const current = hexState(col, row).icon;
-  const index = ICON_CYCLE.findIndex((icon) => iconsEqual(icon, current));
-  const next = ICON_CYCLE[(index + 1) % ICON_CYCLE.length] ?? null;
-  writeHexState(col, row, next);
 }
 
 function generateChunk(col: number, row: number): Chunk {
@@ -560,40 +481,8 @@ function hexIntersectsView(col: number, row: number): boolean {
   );
 }
 
-function easeOutElastic(t: number): number {
-  if (t <= 0) return 0;
-  if (t >= 1) return 1;
-  const period = (2 * Math.PI) / 3;
-  return 2 ** (-10 * t) * Math.sin((t * 10 - 0.75) * period) + 1;
-}
-
-function iconPopScale(id: string, ready: boolean): number {
-  if (!iconPops.has(id)) return 1;
-  if (!ready) return 0;
-  let start = iconPops.get(id) ?? -1;
-  if (start < 0) {
-    start = performance.now();
-    iconPops.set(id, start);
-  }
-  const t = (performance.now() - start) / POP_MS;
-  if (t >= 1) {
-    iconPops.delete(id);
-    return 1;
-  }
-  iconPopping = true;
-  return Math.max(0, easeOutElastic(t));
-}
-
-function pumpIconPops(): void {
-  if (!iconPopping || popFrame !== 0) return;
-  popFrame = requestAnimationFrame(() => {
-    popFrame = 0;
-    render();
-  });
-}
-
 function render(): void {
-  iconPopping = false;
+  beginFrame();
   const width = window.innerWidth;
   const height = window.innerHeight;
   ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
@@ -621,12 +510,13 @@ function render(): void {
     }
   }
 
+  const occupied = new Set(placedCells().map(({ cell }) => hexId(cell.col, cell.row)));
   const iconSize = 48;
   for (const cell of icons) {
-    if (!cell.icon) continue;
+    if (!cell.icon || occupied.has(cell.id)) continue;
     const { x, y } = hexOrigin(cell.col, cell.row);
     const ready = iconReady(cell.icon, render);
-    const scale = iconPopScale(cell.id, ready);
+    const scale = popScale(cell.id, ready);
     if (!ready || scale === 0) continue;
     drawHexIcon(
       ctx,
@@ -638,7 +528,12 @@ function render(): void {
       render,
     );
   }
-  pumpIconPops();
+  for (const placed of placedCells()) {
+    if (!hexIntersectsView(placed.cell.col, placed.cell.row)) continue;
+    const { x, y } = hexOrigin(placed.cell.col, placed.cell.row);
+    drawPlacedCell(placed, { ctx, x, y, width: hexRectangleWidth, midY: y + sideLength });
+  }
+  pumpPops(render);
 
   if (hover) {
     const { x, y } = hexOrigin(hover.col, hover.row);

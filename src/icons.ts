@@ -1,13 +1,15 @@
 import claudeUrl from "@lobehub/icons-static-svg/icons/claude-color.svg?url";
 import deepseekUrl from "@lobehub/icons-static-svg/icons/deepseek-color.svg?url";
 import geminiUrl from "@lobehub/icons-static-svg/icons/gemini-color.svg?url";
+import kimiUrl from "@lobehub/icons-static-svg/icons/kimi-color.svg?url";
 import openaiUrl from "@lobehub/icons-static-svg/icons/openai.svg?url";
+import qoderUrl from "@lobehub/icons-static-svg/icons/qoder-color.svg?url";
 import xaiUrl from "@lobehub/icons-static-svg/icons/xai.svg?url";
 import twemoji from "twemoji";
 
 const TWEMOJI_SVG = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/";
 
-export type LobeSlug = "openai" | "claude" | "xai" | "gemini" | "deepseek";
+export type LobeSlug = "openai" | "claude" | "xai" | "gemini" | "deepseek" | "kimi" | "qoder";
 
 export type HexIcon =
   | { kind: "lobe"; slug: LobeSlug }
@@ -31,7 +33,23 @@ const LOBE_URLS: Record<LobeSlug, string> = {
   xai: xaiUrl,
   gemini: geminiUrl,
   deepseek: deepseekUrl,
+  kimi: kimiUrl,
+  qoder: qoderUrl,
 };
+
+const AGENT_SLUG = {
+  claude: "claude",
+  codex: "openai",
+  grok: "xai",
+  kimi: "kimi",
+  qoder: "qoder",
+} as const;
+
+export function agentHexIcon(agent: string): HexIcon | null {
+  const slug = AGENT_SLUG[agent as keyof typeof AGENT_SLUG];
+  if (!slug) return null;
+  return { kind: "lobe", slug };
+}
 
 const images = new Map<string, HTMLImageElement>();
 

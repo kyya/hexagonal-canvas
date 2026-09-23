@@ -1,0 +1,25 @@
+.hex-message {
+  display: flex;
+  max-width: 95%;
+}
+
+.hex-message.is-user {
+  margin-left: auto;
+}
+
+.hex-message-content {
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.hex-message.is-user .hex-message-content {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.hex-message.is-assistant .hex-message-content {
+  white-space: normal;
+}

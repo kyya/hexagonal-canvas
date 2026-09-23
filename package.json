@@ -4,11 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
+    "server": "node --experimental-strip-types server/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "typescript": "~7.0.2",
     "vite": "^8.3.0"
   },
@@ -17,7 +22,15 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "@lobehub/icons-static-svg": "^1.95.1",
+    "@shadcn/react": "^0.3.1",
+    "@tanstack/react-query": "^5.103.2",
+    "hono": "^4.13.8",
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "streamdown": "^2.6.0",
     "twemoji": "^14.0.2"
   }
 }
