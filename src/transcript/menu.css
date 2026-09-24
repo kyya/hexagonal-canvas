@@ -24,3 +24,52 @@
 .hex-menu-transcript[hidden] {
   display: none;
 }
+
+.hex-menu-details {
+  margin: 0 0 8px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.hex-menu-details[hidden] {
+  display: none;
+}
+
+.hex-menu-title {
+  overflow: hidden;
+  color: rgba(0, 0, 0, 0.86);
+  font-weight: 600;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hex-menu-subtitle {
+  margin-top: 2px;
+  overflow: hidden;
+  color: rgba(0, 0, 0, 0.5);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hex-menu-command {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.72);
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: copy;
+}
+
+.hex-menu-command[data-copied="true"]::after {
+  content: " ✓";
+  color: #16a34a;
+}

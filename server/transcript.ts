@@ -50,7 +50,7 @@ function linesOf(path: string): unknown[] {
     });
 }
 
-function exchange(turns: { role: "user" | "assistant"; text: string }[]): Transcript {
+export function exchange(turns: { role: "user" | "assistant"; text: string }[]): Transcript {
   let answerIndex = -1;
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turns[i]?.role === "assistant" && turns[i]?.text) {

@@ -1,4 +1,5 @@
-import { drawPlacedCell, openPlacedMenu, placedCellAt, placedCells, startCells } from "./cells/board";
+import { drawOverlays, drawPlacedCell, openPlacedMenu, placedCellAt, placedCells, startCells } from "./cells/board";
+import type { CellDetails } from "./cells/types";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
 import { beginFrame, popScale, pumpPops } from "./cells/pop";
@@ -81,11 +82,13 @@ let suppressClick = false;
 
 const menuRoot = document.querySelector<HTMLElement>("#hex-menu");
 const menuTranscriptNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-transcript");
-if (!menuRoot || !menuTranscriptNode) {
+const menuDetailsNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-details");
+if (!menuRoot || !menuTranscriptNode || !menuDetailsNode) {
   throw new Error("Missing hex menu");
 }
 const menu: HTMLElement = menuRoot;
 const menuTranscript: HTMLElement = menuTranscriptNode;
+const menuDetails: HTMLElement = menuDetailsNode;
 canvas.style.touchAction = "none";
 canvas.addEventListener("contextmenu", onContextMenu);
 canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -101,11 +104,14 @@ window.addEventListener("blur", releasePanKeys);
 window.addEventListener("resize", onResize);
 
 loadHexStates();
-loadCamera();
+let framed = loadCamera();
 fitCanvas();
 syncChunks();
 render();
-startCells(() => render());
+startCells(() => {
+  if (!framed) framed = frameCells();
+  render();
+});
 
 function fitCanvas(): void {
   const width = window.innerWidth;
@@ -136,9 +142,13 @@ function onContextMenu(event: MouseEvent): void {
 
 function openMenu(hex: Hex, x: number, y: number): void {
   menuTranscript.hidden = true;
+  menuDetails.hidden = true;
   const placed = placedCellAt(hex.col, hex.row);
   if (placed) {
     openPlacedMenu(placed, {
+      showDetails(details) {
+        showDetails(details);
+      },
       showTranscript(sessionId) {
         showTranscript(sessionId);
       },
@@ -160,7 +170,33 @@ function openMenu(hex: Hex, x: number, y: number): void {
 function closeMenu(): void {
   menu.hidden = true;
   menuTranscript.hidden = true;
+  menuDetails.hidden = true;
   mountTranscript(menuTranscript, null);
+}
+
+function showDetails(details: CellDetails): void {
+  const title = document.createElement("div");
+  title.className = "hex-menu-title";
+  title.textContent = details.title;
+  const subtitle = document.createElement("div");
+  subtitle.className = "hex-menu-subtitle";
+  subtitle.textContent = details.subtitle;
+  menuDetails.replaceChildren(title, subtitle);
+  if (details.command) {
+    const command = details.command;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hex-menu-command";
+    button.title = "复制恢复命令";
+    button.textContent = command;
+    button.addEventListener("click", () => {
+      void navigator.clipboard?.writeText(command).then(() => {
+        button.dataset.copied = "true";
+      });
+    });
+    menuDetails.append(button);
+  }
+  menuDetails.hidden = false;
 }
 
 function showTranscript(sessionId: string): void {
@@ -372,23 +408,55 @@ function loadHexStates(): void {
   }
 }
 
-function loadCamera(): void {
+// Returns whether a saved camera was restored.
+function loadCamera(): boolean {
   try {
     const raw = localStorage.getItem(CAMERA_KEY);
-    if (!raw) return;
+    if (!raw) return false;
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return;
+    if (!parsed || typeof parsed !== "object") return false;
     const record = parsed as { x?: unknown; y?: unknown; zoom?: unknown };
-    if (typeof record.x !== "number" || typeof record.y !== "number") return;
-    if (!Number.isFinite(record.x) || !Number.isFinite(record.y)) return;
+    if (typeof record.x !== "number" || typeof record.y !== "number") return false;
+    if (!Number.isFinite(record.x) || !Number.isFinite(record.y)) return false;
     camera.x = record.x;
     camera.y = record.y;
     if (typeof record.zoom === "number" && Number.isFinite(record.zoom)) {
       camera.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, record.zoom));
     }
+    return true;
   } catch {
     localStorage.removeItem(CAMERA_KEY);
+    return false;
   }
+}
+
+// First visit: fit every placed cell (plus room for project labels) into the view.
+function frameCells(): boolean {
+  const cells = placedCells();
+  if (cells.length === 0) return false;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const { cell } of cells) {
+    const { x, y } = hexOrigin(cell.col, cell.row);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y - 24);
+    maxX = Math.max(maxX, x + hexRectangleWidth);
+    maxY = Math.max(maxY, y + hexRectangleHeight);
+  }
+  const pad = 48;
+  const zoom = Math.min(
+    1,
+    (window.innerWidth - pad * 2) / (maxX - minX),
+    (window.innerHeight - pad * 2) / (maxY - minY),
+  );
+  camera.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+  camera.x = (minX + maxX) / 2 - window.innerWidth / 2 / camera.zoom;
+  camera.y = (minY + maxY) / 2 - window.innerHeight / 2 / camera.zoom;
+  saveCamera();
+  syncChunks();
+  return true;
 }
 
 function saveCamera(): void {
@@ -533,6 +601,7 @@ function render(): void {
     const { x, y } = hexOrigin(placed.cell.col, placed.cell.row);
     drawPlacedCell(placed, { ctx, x, y, width: hexRectangleWidth, midY: y + sideLength });
   }
+  drawOverlays({ ctx, width: hexRectangleWidth, origin: hexOrigin });
   pumpPops(render);
 
   if (hover) {
