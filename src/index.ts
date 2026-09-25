@@ -18,7 +18,7 @@ import { currentLayout } from "./live";
 import { setHovered, setOpened } from "./focus";
 import { installView } from "./view";
 import { cellGeometry, PHI, tiltRise, tiltSquash } from "./cells/golden";
-import type { CellDetails, CellForm, CellMenu, OverlayFrame } from "./cells/types";
+import type { CellDetails, CellForm, CellList, CellMenu, OverlayFrame } from "./cells/types";
 import { subscribeTilt, tiltAmount } from "./tilt";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
@@ -119,9 +119,11 @@ const menuRoot = document.querySelector<HTMLElement>("#hex-menu");
 const menuTranscriptNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-transcript");
 const menuDetailsNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-details");
 const menuFormNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-form");
-if (!menuRoot || !menuTranscriptNode || !menuDetailsNode || !menuFormNode) {
+const menuListNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-list");
+if (!menuRoot || !menuTranscriptNode || !menuDetailsNode || !menuFormNode || !menuListNode) {
   throw new Error("Missing hex menu");
 }
+const menuList: HTMLElement = menuListNode;
 const menu: HTMLElement = menuRoot;
 const menuTranscript: HTMLElement = menuTranscriptNode;
 const menuDetails: HTMLElement = menuDetailsNode;
@@ -312,10 +314,12 @@ function openMenu(hex: Hex, x: number, y: number): void {
   menuTranscript.hidden = true;
   menuDetails.hidden = true;
   menuForm.hidden = true;
+  menuList.hidden = true;
   const api: CellMenu = {
     showDetails,
     showTranscript,
     showForm,
+    showList,
   };
   const placed = placedCellAt(hex.col, hex.row);
   if (placed) {
@@ -357,7 +361,40 @@ function closeMenu(): void {
   menuTranscript.hidden = true;
   menuDetails.hidden = true;
   menuForm.hidden = true;
+  menuList.hidden = true;
   mountTranscript(menuTranscript, null);
+}
+
+function showList(list: CellList): void {
+  const title = document.createElement("div");
+  title.className = "hex-menu-title";
+  title.textContent = list.title;
+  const subtitle = document.createElement("div");
+  subtitle.className = "hex-menu-subtitle";
+  subtitle.textContent = list.subtitle;
+  const items = document.createElement("div");
+  items.className = "hex-menu-list-items";
+  items.setAttribute("role", "listbox");
+  for (const entry of list.items) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "hex-menu-list-item";
+    item.setAttribute("role", "option");
+    const name = document.createElement("span");
+    name.className = "hex-menu-list-title";
+    name.textContent = entry.title;
+    const meta = document.createElement("span");
+    meta.className = "hex-menu-list-meta";
+    meta.textContent = entry.meta;
+    item.append(name, meta);
+    item.addEventListener("click", () => {
+      for (const other of items.children) other.setAttribute("aria-selected", String(other === item));
+      entry.onSelect();
+    });
+    items.append(item);
+  }
+  menuList.replaceChildren(title, subtitle, items);
+  menuList.hidden = false;
 }
 
 function showForm(form: CellForm): void {

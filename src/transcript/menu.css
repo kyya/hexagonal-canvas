@@ -11,7 +11,8 @@
   font: 12px/1.4 ui-sans-serif, system-ui, sans-serif;
 }
 
-.hex-menu[hidden] {
+.hex-menu[hidden],
+.hex-menu-list[hidden] {
   display: none;
 }
 
@@ -72,6 +73,53 @@
 .hex-menu-command[data-copied="true"]::after {
   content: " ✓";
   color: #16a34a;
+}
+
+.hex-menu-list-items {
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  margin-top: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.hex-menu-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hex-menu-list-item:hover,
+.hex-menu-list-item[aria-selected="true"] {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.hex-menu-list-title {
+  overflow: hidden;
+  color: rgba(0, 0, 0, 0.8);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hex-menu-list-meta {
+  flex: none;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+}
+
+.hex-menu-list + .hex-menu-details:not([hidden]) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .hex-menu-links {

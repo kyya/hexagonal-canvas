@@ -52,8 +52,14 @@ export type CellForm = {
   onDelete?: () => void;
 };
 
+export type CellListItem = { title: string; meta: string; onSelect(): void };
+
+export type CellList = { title: string; subtitle: string; items: CellListItem[] };
+
 export type CellMenu = {
   showForm(form: CellForm): void;
+  // A list to pick from (e.g. the sessions in a coin stack); picking one usually shows its details.
+  showList(list: CellList): void;
   showDetails(details: CellDetails): void;
   // `live` sessions keep refreshing while the menu is open.
   showTranscript(sessionId: string, live?: boolean): void;

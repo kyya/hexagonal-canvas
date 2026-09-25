@@ -31,7 +31,7 @@ export function startMinimap(root: HTMLElement): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  let layout: Layout = { sessions: [], labels: [] };
+  let layout: Layout = { sessions: [], labels: [], stacks: [] };
   // World → minimap transform, refreshed when the layout changes.
   let fit = { minX: 0, minY: 0, scale: 1, offsetX: 0, offsetY: 0 };
   let lastKey = "";

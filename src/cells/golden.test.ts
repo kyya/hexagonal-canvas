@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, insetOf, PHI, phiFade, prismHeight, safeHalfWidth, STICKER, STRATEGIC_ZOOM, TILT, tiltRise, tiltSquash } from "./golden.ts";
+import { BREATH, breathAlpha, cellGeometry, coinCount, STACK, FADES, FOG, insetOf, PHI, phiFade, prismHeight, safeHalfWidth, STICKER, STRATEGIC_ZOOM, TILT, tiltRise, tiltSquash } from "./golden.ts";
 
 // The canvas hex: side 64, so the apothem (inscribed radius, half the cell width) is 64·cos 30°.
 const APOTHEM = Math.cos(Math.PI / 6) * 64;
@@ -266,6 +266,28 @@ describe("sticker icons", () => {
     const g = cellGeometry(APOTHEM);
     const edge = (g.iconSize / 2) * (1 + STICKER.border);
     assert.ok(edge < g.badgeDistance, "the badge centre lies beyond the sticker's edge");
+  });
+});
+
+describe("coin stacks", () => {
+  test("coins: radius apothem / φ, thickness and wobble apothem / φ⁶", () => {
+    close(STACK.radius, 1 / PHI, "radius");
+    close(STACK.thickness, PHI ** -6, "thickness");
+    close(STACK.wobble, PHI ** -6, "wobble");
+  });
+  test("a pile shows 1 + log_φ(count) coins, at most seven", () => {
+    assert.deepEqual([0, 1, 2, 3, 5, 8, 13, 18, 100, 5000].map(coinCount), [0, 1, 2, 3, 4, 5, 6, 7, 7, 7]);
+  });
+  test("the tallest pile, centred, stays inside the hex", () => {
+    const pile = STACK.maxCoins * STACK.thickness * APOTHEM;
+    const reach = pile / 2 + STACK.radius * APOTHEM + APOTHEM * STACK.wobble;
+    assert.ok(reach < 64, `pile reaches ${reach} from the centre, the hex vertex is 64`);
+  });
+  test("the count on the top coin stays inside the text safe zone", () => {
+    const g = cellGeometry(APOTHEM);
+    const top = -(STACK.maxCoins * STACK.thickness * APOTHEM) / 2;
+    const width = 2 * safeHalfWidth(g, top - g.yieldFont / 2, top + g.yieldFont / 2);
+    assert.ok(width >= 4 * 0.62 * g.yieldFont, `room for a four-digit count: ${width}`);
   });
 });
 

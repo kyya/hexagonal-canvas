@@ -21,17 +21,19 @@ function closest(rgb: [number, number, number], references: Record<string, strin
   return Object.entries(references).sort(([, a], [, b]) => toward(hexOf(b)) - toward(hexOf(a)))[0]?.[0] ?? "";
 }
 
-describe("lenses, strategic view and fog of war", () => {
+describe("lenses, strategic view and stale sessions", () => {
   let scene: Scene;
   let ancient: Story;
+  let older: Story;
   let recent: Story;
 
   before(async () => {
     scene = await startScene({
       setup: (home) => {
         ancient = writeAged(home, 900, 90, "三个月前的老会话");
+        older = writeAged(home, 902, 20, "二十天前的会话");
         recent = writeAged(home, 901, 2, "前天的会话");
-        return [ancient, recent];
+        return [ancient, older, recent];
       },
     });
   });
@@ -57,14 +59,14 @@ describe("lenses, strategic view and fog of war", () => {
     for (const name of ["Claude Code", "Codex", "Gemini CLI", "Kimi Code"]) assert.ok(((await legend.textContent()) ?? "").includes(name), `legend lists ${name}`);
     await scene.shot("f3-lens-agent");
 
-    // Recency: the two-day-old session glows stronger than the ninety-day-old one.
+    // Recency: the two-day-old session glows stronger than the twenty-day-old one.
     await scene.page.keyboard.press("2");
     assert.equal(await lensTab("新旧").getAttribute("aria-selected"), "true");
     const strength = async (id: string) => {
       const { alpha } = await scene.pixel(id, 0, HEX_RADIUS * 0.75);
       return alpha;
     };
-    await eventually("recent to glow over ancient", async () => (await strength(recent.id)) - (await strength(ancient.id)), (gap) => gap > 40);
+    await eventually("recent to glow over older", async () => (await strength(recent.id)) - (await strength(older.id)), (gap) => gap > 40);
     await scene.shot("f3-lens-recency");
 
     // Messages lens: legend reports the maximum.
@@ -122,38 +124,34 @@ describe("lenses, strategic view and fog of war", () => {
     await scene.shot("f4-minimap", { x: 0, y: VIEWPORT.height - 160, width: 260, height: 160 });
   });
 
-  test("⑨ fog of war: sessions untouched for 30 days are veiled, recent history is not", async () => {
-    // Back to a close view around the two aged sessions.
+  test("⑨ stale sessions leave the map for their project's coin stack; recent history stays", async () => {
     const layout = await scene.layout();
-    const cell = layout.sessions.find((session) => session.id === ancient.id);
+    const byId = new Map(layout.sessions.map((session) => [session.id, session]));
+    assert.equal(byId.get(ancient.id)?.stacked, true, "the ninety-day-old session is piled");
+    assert.equal(byId.get(recent.id)?.stacked, false, "recent history keeps its hex");
+    assert.equal(byId.get(older.id)?.stacked, false, "twenty days is not stale yet");
+    const stack = layout.stacks.find((item) => item.sessions.some((session) => session.id === ancient.id));
+    assert.ok(stack, "the ancient session is in a stack");
+    const cell = byId.get(ancient.id);
     assert.ok(cell);
     await scene.page.evaluate(
       ([col, row]) => (window as unknown as { __hexCanvas: { focus(c: number, r: number): void } }).__hexCanvas.focus(col, row),
       [cell.col, cell.row],
     );
     const target = hexCentre(cell.col, cell.row);
-    await eventually("the camera to reach the ancient session", () => scene.camera(), (cam) =>
+    await eventually("the camera to reach the stack", () => scene.camera(), (cam) =>
       Math.abs(cam.x + VIEWPORT.width / 2 / cam.zoom - target.x) < 2 && cam.zoom >= 1,
     );
-    const veil = await scene.pixel(ancient.id, 0, HEX_RADIUS * 0.75);
-    const clear = await scene.pixel(recent.id, 0, HEX_RADIUS * 0.75);
-    assert.ok(veil.alpha > 100, `ancient session should be veiled, alpha ${veil.alpha}`);
-    const spread = Math.max(...veil.rgb) - Math.min(...veil.rgb);
-    assert.ok(spread < 16, `fog is a neutral grey, got ${veil.rgb}`);
-    assert.equal(clear.alpha, 0, "recent history stays clear");
-    // Fogged sessions still answer: the tooltip works.
+    // The pile's top coin is solid silver at the hex centre.
+    const coin = await scene.pixel(ancient.id, HEX_RADIUS * 0.3, 0);
+    assert.equal(coin.alpha, 255, "a coin covers the stack's hex");
+    const spread = Math.max(...coin.rgb) - Math.min(...coin.rgb);
+    assert.ok(spread < 16, `coins are silver grey, got ${coin.rgb}`);
     const point = await scene.cellPoint(ancient.id);
     await scene.page.mouse.move(point.cssX, point.cssY);
-    await scene.page.locator("#hex-tooltip").getByText("三个月前的老会话").waitFor();
-    const recentPoint = await scene.cellPoint(recent.id);
-    const left = Math.min(point.cssX, recentPoint.cssX) - 110;
-    const top = Math.min(point.cssY, recentPoint.cssY) - 110;
-    await scene.shot("f9-fog", {
-      x: Math.max(0, left),
-      y: Math.max(0, top),
-      width: Math.abs(point.cssX - recentPoint.cssX) + 220,
-      height: Math.abs(point.cssY - recentPoint.cssY) + 220,
-    });
+    await scene.page.locator("#hex-tooltip").getByText("1 个过时会话").waitFor();
+    await scene.shot("f9-stack", { x: Math.max(0, point.cssX - 220), y: Math.max(0, point.cssY - 160), width: 440, height: 300 });
+    await scene.page.mouse.move(2, 2);
   });
 
   test("no page errors", () => {

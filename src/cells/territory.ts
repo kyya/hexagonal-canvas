@@ -16,7 +16,7 @@ const WAITING = "#f59e0b";
 
 type Banner = { label: ProjectLabel; x: number; y: number; width: number; height: number };
 
-let layout: Layout = { sessions: [], labels: [] };
+let layout: Layout = { sessions: [], labels: [], stacks: [] };
 let projectOf = new Map<string, string>();
 let banners: Banner[] = [];
 

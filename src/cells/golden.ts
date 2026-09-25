@@ -191,3 +191,20 @@ export const BREATH_FRAME_MS = 1000 / PHI ** 6;
 export function stillBreath(breath: Breath): number {
   return (breath.min + breath.max) / 2;
 }
+
+// Coin stacks: each project's stale sessions (untouched for FOG.afterDays) pile up on one hex like
+// coins. A coin is a disc of radius apothem / φ, apothem / φ⁶ thick, each nudged sideways by up to
+// apothem / φ⁶ so the pile looks stacked by hand; the pile is centred in the hex. It shows
+// 1 + log_φ(count) coins, one more each time the count grows by φ: one session is one coin, 18
+// sessions (≈ φ⁶) are seven coins, the most a pile shows.
+export const STACK = {
+  radius: phiFade(1),
+  thickness: phiFade(6),
+  wobble: phiFade(6),
+  maxCoins: 7,
+} as const;
+
+export function coinCount(sessions: number): number {
+  if (sessions <= 0) return 0;
+  return Math.min(STACK.maxCoins, 1 + Math.round(Math.log(sessions) / Math.log(PHI)));
+}

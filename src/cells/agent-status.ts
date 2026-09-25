@@ -26,8 +26,10 @@ let byPosition = new Map<string, AgentCell>();
 let primed = false;
 
 let maxMessages = 0;
+let allSessions: LiveSession[] = [];
 
 function remember(layout: Layout): void {
+  allSessions = layout.sessions;
   maxMessages = Math.max(0, ...layout.sessions.map((session) => session.messages));
   const ids = new Set(layout.sessions.map((session) => session.id));
   for (const session of layout.sessions) {
@@ -40,7 +42,8 @@ function remember(layout: Layout): void {
     if (!ids.has(id)) seen.delete(id);
   }
   primed = true;
-  cells = layout.sessions.map((session) => ({
+  // Stale sessions are drawn by the coin stack (./stacks.ts), not one per hex.
+  cells = layout.sessions.filter((session) => !session.stacked).map((session) => ({
     id: `agent-status:${session.id}`,
     col: session.col,
     row: session.row,
@@ -107,7 +110,7 @@ function drawStatusBackground(ctx: CanvasRenderingContext2D, frame: CellFrame, s
 }
 
 // Compact counts so the pill stays short: 999, 1.2k, 12k, 120k.
-function compactCount(value: number): string {
+export function compactCount(value: number): string {
   if (value < 1000) return String(value);
   const thousands = value / 1000;
   return `${thousands < 10 ? thousands.toFixed(1).replace(/\.0$/, "") : Math.round(thousands)}k`;
@@ -170,7 +173,7 @@ function find(cell: BoardCell): AgentCell | null {
   return byPosition.get(`${cell.col},${cell.row}`) ?? null;
 }
 
-function ago(value: string | null): string {
+export function ago(value: string | null): string {
   const time = value ? Date.parse(value) : Number.NaN;
   if (!Number.isFinite(time)) return "";
   const seconds = Math.max(0, (Date.now() - time) / 1000);
@@ -250,11 +253,11 @@ export const agentStatus: CellModule = {
   },
 };
 
-function details(session: LiveSession): CellDetails {
+export function details(session: LiveSession): CellDetails {
   const state = session.status ? STATUS_TEXT[session.status] : session.live ? "运行中" : "";
   const waitingFor = session.status === "waiting" && session.waitingFor ? `：${session.waitingFor}` : "";
   const status = session.live ? `${state}${waitingFor}` : ago(session.updatedAt);
-  const parent = session.parentId ? cells.find((cell) => cell.session.id === session.parentId)?.session : null;
+  const parent = session.parentId ? allSessions.find((item) => item.id === session.parentId) : null;
   const origin = parent ? `${session.relation === "fork" ? "分叉自" : "派生自"}「${parent.title}」` : "";
   return {
     title: session.title,

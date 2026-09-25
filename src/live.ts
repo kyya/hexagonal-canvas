@@ -1,4 +1,5 @@
 // Explicit extension: the tests load this module in Node, which does not resolve bare paths.
+import { FOG } from "./cells/golden.ts";
 import { replayState, subscribeReplay } from "./replay.ts";
 
 export type LiveSession = {
@@ -18,6 +19,18 @@ export type LiveSession = {
   relation: "fork" | "spawn" | null;
   col: number;
   row: number;
+  // Stale history (untouched for FOG.afterDays) is piled into its project's coin stack: the
+  // session keeps the stack's hex as its position but is drawn as part of the pile.
+  stacked: boolean;
+};
+
+// A project's pile of stale sessions, like a stack of coins on one hex (newest first).
+export type Stack = {
+  id: string;
+  cwd: string;
+  col: number;
+  row: number;
+  sessions: LiveSession[];
 };
 
 export type ProjectLabel = {
@@ -37,9 +50,19 @@ export type ProjectLabel = {
 export type Layout = {
   sessions: LiveSession[];
   labels: ProjectLabel[];
+  stacks: Stack[];
 };
 
-export type ApiSession = Omit<LiveSession, "col" | "row">;
+export type ApiSession = Omit<LiveSession, "col" | "row" | "stacked">;
+
+const DAY_MS = 86_400_000;
+
+// History nobody has touched for FOG.afterDays days (the fog of war) goes onto the coin stack.
+export function isStale(session: ApiSession, now = Date.now()): boolean {
+  if (session.live) return false;
+  const touched = Date.parse(session.updatedAt ?? session.createdAt ?? "");
+  return !Number.isFinite(touched) || now - touched >= FOG.afterDays * DAY_MS;
+}
 
 // Projects are laid out on shelves. A shelf wraps once it is this many columns wide.
 const SHELF_COLS = 36;
@@ -106,8 +129,11 @@ function time(value: string | null): number {
 }
 
 // Order is chosen for stability: projects and sessions keep their cells while new ones are
-// appended, so the canvas does not reshuffle every time a session writes a line.
-export function place(sessions: ApiSession[]): Layout {
+// appended, so the canvas does not reshuffle every time a session writes a line. With `stack`, each
+// project's stale sessions share one hex at the front of its cluster.
+export function place(sessions: ApiSession[], options: { stack?: boolean; now?: number } = {}): Layout {
+  const stack = options.stack ?? true;
+  const now = options.now ?? Date.now();
   const groups = new Map<string, ApiSession[]>();
   for (const session of sessions) {
     const key = session.cwd || "";
@@ -124,11 +150,15 @@ export function place(sessions: ApiSession[]): Layout {
 
   const placed: LiveSession[] = [];
   const labels: ProjectLabel[] = [];
+  const stacks: Stack[] = [];
   let shelfCol = 0;
   let shelfRow = 0;
   let shelfRadius = 0;
   for (const [cwd, list] of projects) {
-    const radius = ringRadius(list.length);
+    const stale = stack ? list.filter((session) => isStale(session, now)) : [];
+    const active = stale.length > 0 ? list.filter((session) => !stale.includes(session)) : list;
+    const cellCount = active.length + (stale.length > 0 ? 1 : 0);
+    const radius = ringRadius(cellCount);
     if (shelfCol > 0 && shelfCol + 2 * radius + 1 > SHELF_COLS) {
       // Keep shelf rows even so every shelf has the same row parity.
       shelfRow += 2 * Math.ceil((2 * shelfRadius + 4) / 2);
@@ -137,10 +167,27 @@ export function place(sessions: ApiSession[]): Layout {
     }
     shelfRadius = Math.max(shelfRadius, radius);
     const centre = { col: shelfCol + radius, row: shelfRow };
-    cluster(centre, list.length).forEach((cell, index) => {
-      const session = list[index];
-      if (session) placed.push({ ...session, col: cell.col, row: cell.row });
+    const cells = cluster(centre, cellCount);
+    // The pile takes the cluster's front cell (lowest row, nearest the middle), so in the tilted
+    // view nothing stands in front of it; active sessions fill the rest in ring order.
+    const pile =
+      stale.length > 0
+        ? cells.reduce((best, cell) =>
+            cell.row > best.row || (cell.row === best.row && Math.abs(cell.col - centre.col) < Math.abs(best.col - centre.col)) ? cell : best,
+          )
+        : null;
+    const free = pile ? cells.filter((cell) => cell !== pile) : cells;
+    active.forEach((session, index) => {
+      const cell = free[index];
+      if (cell) placed.push({ ...session, col: cell.col, row: cell.row, stacked: false });
     });
+    if (stale.length > 0 && pile) {
+      const members = stale
+        .map((session) => ({ ...session, col: pile.col, row: pile.row, stacked: true }))
+        .sort((a, b) => time(b.updatedAt ?? b.createdAt) - time(a.updatedAt ?? a.createdAt));
+      placed.push(...members);
+      stacks.push({ id: `stack:${cwd}`, cwd, col: pile.col, row: pile.row, sessions: members });
+    }
     labels.push({
       name: projectName(cwd) || "Unknown project",
       cwd,
@@ -154,11 +201,11 @@ export function place(sessions: ApiSession[]): Layout {
     });
     shelfCol += 2 * radius + 2;
   }
-  return { sessions: placed, labels };
+  return { sessions: placed, labels, stacks };
 }
 
 // One EventSource for the page; every module that cares about sessions subscribes to the layout.
-const EMPTY: Layout = { sessions: [], labels: [] };
+const EMPTY: Layout = { sessions: [], labels: [], stacks: [] };
 const listeners = new Set<(layout: Layout) => void>();
 let raw: ApiSession[] = [];
 let latest: Layout = EMPTY;
@@ -167,9 +214,10 @@ let source: EventSource | null = null;
 // During a replay, keep every cell where the full layout puts it but show only sessions that
 // existed at the replay time, all as history, with banner counts to match.
 function compute(): Layout {
-  const full = place(raw);
   const replay = replayState();
-  if (!replay.active) return full;
+  if (!replay.active) return place(raw);
+  // A replay shows every session where it first appeared, so nothing is piled up.
+  const full = place(raw, { stack: false });
   const sessions = full.sessions
     .filter((session) => time(session.createdAt) <= replay.time)
     .map((session) => ({ ...session, live: false, status: null, waitingFor: null }));
@@ -178,7 +226,7 @@ function compute(): Layout {
   const labels = full.labels
     .filter((label) => counts.has(label.cwd))
     .map((label) => ({ ...label, total: counts.get(label.cwd) ?? 0, live: 0, waiting: 0 }));
-  return { sessions, labels };
+  return { sessions, labels, stacks: [] };
 }
 
 function emit(): void {

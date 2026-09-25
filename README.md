@@ -57,7 +57,10 @@ project path or open it in VS Code.
   message count, with a legend for each. The choice is remembered.
 - **Strategic view**: zoom out past φ⁻¹ and cells become flat colour blocks without icons, like
   Civ's 2D map; the **minimap** (bottom-left) shows everything and moves the camera on click or drag.
-- **Fog of war**: history sessions untouched for 30 days are veiled in grey (state lens).
+- **Coin stacks**: history sessions untouched for 30 days leave the map and pile up like coins on
+  one hex at the front of their project's cluster. The pile grows with the count (one more coin
+  each time it grows by φ) and shows the number on top; hover for a summary, right-click to list
+  the sessions and open any of them. Search still finds them, and the replay unpiles them.
 - **Tilted view** (`T` or the 倾斜 chip): tilt the camera like Civ's default view. The ground is
   foreshortened to φ⁻¹ (about 52°), every session stands as a hex prism that rises with its message
   count, icons and the waiting badge lie on the tops and tilt with them, and text stays upright to read. Zooming out towards the strategic view levels the

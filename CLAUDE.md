@@ -41,6 +41,9 @@ These are deliberate and locked by `src/cells/golden.test.ts`; change them only 
   `frame.squash` to `cellGeometry`, and size text with `safeHalfWidth`, which then keeps it inside
   the foreshortened safe zone. A new overlay that lies on
   the ground goes in `underlay`; one that joins cells uses `frame.lift` to reach their raised tops.
+- **Stale history is piled, not spread.** Sessions untouched for `FOG.afterDays` go onto their
+  project's coin stack (`place` in `src/live.ts`, drawn by `src/cells/stacks.ts`, sized by `STACK` and
+  `coinCount`); the replay unpiles them.
 - **State is shown by tint and breath, not rings.** A live session tints its whole hex and breathes
   (idle still, busy shallow and quick, waiting deep and slow); only waiting adds the "!" badge.
 - Before and after any change to cell drawing, render the storybook and look at the crops.

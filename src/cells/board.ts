@@ -1,11 +1,12 @@
 import { agentStatus } from "./agent-status";
 import { pinsModule } from "./pins";
 import { relations } from "./relations";
+import { stacks } from "./stacks";
 import { territory } from "./territory";
 import type { BoardCell, CellDetails, CellFrame, CellMenu, CellModule, OverlayFrame } from "./types";
 
 // Draw order: territory borders and banners overlay the agent cells.
-const modules: CellModule[] = [agentStatus, pinsModule, relations, territory];
+const modules: CellModule[] = [agentStatus, stacks, pinsModule, relations, territory];
 
 export type PlacedCell = {
   module: CellModule;
