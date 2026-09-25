@@ -44,5 +44,7 @@ app.get("/api/sessions/stream", (c) => {
   });
 });
 
-serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 8787 });
-console.log("agent status http://127.0.0.1:8787");
+// HEX_API_PORT lets a second instance (e.g. the cell storybook) run beside `pnpm dev`.
+const port = Number(process.env.HEX_API_PORT) || 8787;
+serve({ fetch: app.fetch, hostname: "127.0.0.1", port });
+console.log(`agent status http://127.0.0.1:${port}`);

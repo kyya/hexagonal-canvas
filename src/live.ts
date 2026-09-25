@@ -26,7 +26,7 @@ export type Layout = {
   labels: ProjectLabel[];
 };
 
-type ApiSession = Omit<LiveSession, "col" | "row">;
+export type ApiSession = Omit<LiveSession, "col" | "row">;
 
 // Projects are laid out on shelves. A shelf wraps once it is this many columns wide.
 const SHELF_COLS = 36;
@@ -94,7 +94,7 @@ function time(value: string | null): number {
 
 // Order is chosen for stability: projects and sessions keep their cells while new ones are
 // appended, so the canvas does not reshuffle every time a session writes a line.
-function place(sessions: ApiSession[]): Layout {
+export function place(sessions: ApiSession[]): Layout {
   const groups = new Map<string, ApiSession[]>();
   for (const session of sessions) {
     const key = session.cwd || "";
