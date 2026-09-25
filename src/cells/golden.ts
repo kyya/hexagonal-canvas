@@ -1,18 +1,38 @@
 // Every proportion inside a cell derives from the golden ratio, measured from the hex's apothem
 // (the radius of its inscribed circle, half the cell's width):
 //
-//   apothem : icon radius  =  φ² : 1
+//   apothem : icon radius           =  φ² : 1
+//   apothem : badge distance        =  φ  : 1   (badge centre from the icon centre)
+//   icon radius : badge radius      =  φ² : 1
+//   badge radius : badge outline    =  φ³ : 1
+//   badge diameter : glyph size     =  φ  : 1
 //
-// A session's state is not drawn as a ring or badge but as a soft tint filling the hex. The tints
-// breathe with periods that are powers of φ seconds, and every opacity is a negative power of φ.
+// A session's state is a soft tint filling the hex. The tints breathe with periods that are powers
+// of φ seconds, and every opacity is a negative power of φ. Only the waiting state adds a small
+// badge, so it can be recognised without relying on colour; the badge sits on the diagonal of a
+// golden rectangle (rise : run = φ : 1), top-right of the icon.
 export const PHI = (1 + Math.sqrt(5)) / 2;
 
 export type CellGeometry = {
   iconSize: number;
+  badgeDistance: number;
+  badgeAngle: number;
+  badgeRadius: number;
+  badgeOutline: number;
+  badgeGlyph: number;
 };
 
 export function cellGeometry(apothem: number): CellGeometry {
-  return { iconSize: (apothem / PHI ** 2) * 2 };
+  const iconRadius = apothem / PHI ** 2;
+  const badgeRadius = iconRadius / PHI ** 2;
+  return {
+    iconSize: iconRadius * 2,
+    badgeDistance: apothem / PHI,
+    badgeAngle: -Math.atan(PHI),
+    badgeRadius,
+    badgeOutline: badgeRadius / PHI ** 3,
+    badgeGlyph: (badgeRadius * 2) / PHI,
+  };
 }
 
 // φ^-n: 0.618, 0.382, 0.236, 0.146, 0.090 …

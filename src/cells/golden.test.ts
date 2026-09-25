@@ -34,14 +34,47 @@ describe("cell geometry", () => {
     close(APOTHEM / (g.iconSize / 2), PHI ** 2, "apothem / icon radius");
   });
 
-  test("scales with the hex", () => {
-    close(cellGeometry(APOTHEM * 2).iconSize, g.iconSize * 2, "icon size at twice the size");
+  test("apothem : badge distance = φ : 1", () => {
+    close(APOTHEM / g.badgeDistance, PHI, "apothem / badge distance");
   });
 
-  test("icon ≈ 42.341px at the canvas size (side 64)", () => {
-    // Pixel snapshot: catches a change that keeps the ratio but moves the base.
-    close(g.iconSize, 42.341, "iconSize", 0.0005);
+  test("icon radius : badge radius = φ² : 1", () => {
+    close(g.iconSize / 2 / g.badgeRadius, PHI ** 2, "icon radius / badge radius");
   });
+
+  test("badge radius : badge outline = φ³ : 1", () => {
+    close(g.badgeRadius / g.badgeOutline, PHI ** 3, "badge radius / outline");
+  });
+
+  test("badge diameter : glyph = φ : 1", () => {
+    close((g.badgeRadius * 2) / g.badgeGlyph, PHI, "badge diameter / glyph");
+  });
+
+  test("badge sits on the golden-rectangle diagonal (rise : run = φ : 1), top-right", () => {
+    close(Math.tan(-g.badgeAngle), PHI, "tan(badge angle)");
+    assert.ok(g.badgeAngle < 0 && g.badgeAngle > -Math.PI / 2, "badge must be in the top-right quadrant");
+  });
+
+  test("badge clears the icon's centre area and stays inside the hex", () => {
+    const reach = g.badgeDistance + g.badgeRadius + g.badgeOutline;
+    assert.ok(reach < APOTHEM, `badge reaches ${reach}, hex apothem is ${APOTHEM}`);
+    assert.ok(g.badgeDistance > g.iconSize / 2, "badge centre must lie outside the icon's radius");
+  });
+
+  test("scales with the hex", () => {
+    const double = cellGeometry(APOTHEM * 2);
+    for (const key of ["iconSize", "badgeDistance", "badgeRadius", "badgeOutline", "badgeGlyph"] as const) {
+      close(double[key], g[key] * 2, `${key} at twice the size`);
+    }
+    close(double.badgeAngle, g.badgeAngle, "badge angle does not scale");
+  });
+
+  // Pixel snapshot at the canvas size (side 64): catches a change that keeps the ratios but moves the base.
+  const snapshot = { iconSize: 42.341, badgeDistance: 34.255, badgeRadius: 8.086, badgeOutline: 1.909, badgeGlyph: 9.995 };
+  for (const [key, value] of Object.entries(snapshot)) {
+    test(`${key} ≈ ${value}px`, () => close(g[key as keyof typeof snapshot], value, key, 0.0005));
+  }
+  test("badge angle ≈ -58.283°", () => close((g.badgeAngle * 180) / Math.PI, -58.283, "badge angle", 0.0005));
 });
 
 describe("state breathing", () => {

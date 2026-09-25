@@ -1,12 +1,13 @@
 import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { connectLiveSessions, type Layout, type LiveSession, type ProjectLabel } from "../live";
 import { armPop, popScale } from "./pop";
-import { BREATH, breathAlpha, cellGeometry, FADES } from "./golden";
+import { BREATH, breathAlpha, cellGeometry, FADES, type CellGeometry } from "./golden";
 import type { BoardCell, CellFrame, CellModule } from "./types";
 
 // Every size, timing and opacity comes from ./golden (golden ratio, locked by golden.test.ts);
 // only colours live here. A live session's state is a soft tint filling its hex, breathing.
 const TINT = { idle: "#22c55e", busy: "#2563eb", waiting: "#f59e0b" } as const;
+const BADGE = "#f59e0b";
 const BASE_TITLE = document.title;
 
 type AgentCell = BoardCell & { session: LiveSession };
@@ -73,6 +74,28 @@ function drawStateTint(ctx: CanvasRenderingContext2D, frame: CellFrame, state: k
   ctx.restore();
 }
 
+// Waiting also gets a solid "!" badge (not breathing), so it reads without relying on colour.
+function drawWaitingBadge(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number): void {
+  const x = cx + Math.cos(g.badgeAngle) * g.badgeDistance * scale;
+  const y = cy + Math.sin(g.badgeAngle) * g.badgeDistance * scale;
+  const radius = g.badgeRadius * scale;
+  ctx.save();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(x, y, radius + g.badgeOutline * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = BADGE;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = `800 ${Math.round(g.badgeGlyph * scale)}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("!", x, y + 0.5 * scale);
+  ctx.restore();
+}
+
 const STATUS_TEXT = { busy: "工作中", waiting: "等你处理", idle: "空闲" } as const;
 
 function find(cell: BoardCell): AgentCell | null {
@@ -125,6 +148,7 @@ export const agentStatus: CellModule = {
     if (!agent.session.live) ctx.globalAlpha = FADES.history;
     drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
     ctx.restore();
+    if (state === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
   },
   overlay(frame) {
     const { ctx } = frame;
