@@ -85,7 +85,8 @@ export async function startApp(home: string): Promise<App> {
   };
   const apiPort = await freePort();
   const webPort = await freePort();
-  const env = { ...process.env, HOME: home, HEX_API_PORT: String(apiPort) };
+  // Only the fixture's own session registries count as live, never the machine's real processes.
+  const env = { ...process.env, HOME: home, HEX_API_PORT: String(apiPort), HEX_SCAN_PROCESSES: "0" };
   const spawnIn = (command: string, args: string[]) =>
     track(spawn(command, args, { cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"] }));
   spawnIn(process.execPath, ["--experimental-strip-types", "--no-warnings", "server/index.ts"]);

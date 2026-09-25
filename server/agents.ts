@@ -39,6 +39,9 @@ function readJson(path: string): unknown {
 }
 
 function listProcesses(): ProcessRow[] {
+  // HEX_SCAN_PROCESSES=0 limits live detection to the agents' own registries (~/.claude/sessions,
+  // ~/.grok, ~/.codex): tests running on a fixture $HOME must not pick up the machine's real agents.
+  if (process.env.HEX_SCAN_PROCESSES === "0") return [];
   try {
     const output = execFileSync("ps", ["-ax", "-o", "pid=,command="], {
       encoding: "utf8",

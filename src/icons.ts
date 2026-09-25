@@ -60,6 +60,9 @@ const AGENT_SLUG = {
   kimi: "kimi",
   qoder: "qoder",
   codebuddy: "codebuddy",
+  // WorkBuddy is CodeBuddy's desktop sibling; Oh My Pi is a fork of Pi.
+  workbuddy: "codebuddy",
+  omp: "pi",
   gemini: "gemini",
   kiro: "kiro",
   pi: "pi",

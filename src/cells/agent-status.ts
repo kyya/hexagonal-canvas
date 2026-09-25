@@ -1,8 +1,8 @@
 import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
-import { connectLiveSessions, type Layout, type LiveSession, type ProjectLabel } from "../live";
+import { subscribeLayout, type Layout, type LiveSession } from "../live";
 import { armPop, popScale } from "./pop";
 import { BREATH, breathAlpha, cellGeometry, FADES, type CellGeometry } from "./golden";
-import type { BoardCell, CellFrame, CellModule } from "./types";
+import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 
 // Every size, timing and opacity comes from ./golden (golden ratio, locked by golden.test.ts);
 // only colours live here. A live session's state is a soft tint filling its hex, breathing.
@@ -15,7 +15,6 @@ type AgentCell = BoardCell & { session: LiveSession };
 const seen = new Set<string>();
 let cells: AgentCell[] = [];
 let byPosition = new Map<string, AgentCell>();
-let labels: ProjectLabel[] = [];
 let primed = false;
 
 function remember(layout: Layout): void {
@@ -37,7 +36,6 @@ function remember(layout: Layout): void {
     session,
   }));
   byPosition = new Map(cells.map((cell) => [`${cell.col},${cell.row}`, cell]));
-  labels = layout.labels;
   const waiting = layout.sessions.filter((session) => session.status === "waiting").length;
   document.title = waiting > 0 ? `(${waiting}) 等你处理 · ${BASE_TITLE}` : BASE_TITLE;
 }
@@ -117,7 +115,7 @@ export const agentStatus: CellModule = {
   kind: "agent-status",
   start(onChange) {
     frameRequest = onChange;
-    connectLiveSessions((layout) => {
+    subscribeLayout((layout) => {
       remember(layout);
       onChange();
     });
@@ -150,33 +148,27 @@ export const agentStatus: CellModule = {
     ctx.restore();
     if (state === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
   },
-  overlay(frame) {
-    const { ctx } = frame;
-    ctx.save();
-    ctx.font = "600 13px ui-sans-serif, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
-    for (const label of labels) {
-      const { x, y } = frame.origin(label.col, label.row);
-      ctx.fillText(label.name, x + frame.width / 2, y - 6);
-    }
-    ctx.restore();
+  describe(cell) {
+    const agent = find(cell);
+    return agent ? details(agent.session) : null;
   },
   menu(cell, menu) {
     const agent = find(cell);
     if (!agent) return;
-    const { session } = agent;
-    const state = session.status ? STATUS_TEXT[session.status] : session.live ? "运行中" : "";
-    const waitingFor = session.status === "waiting" && session.waitingFor ? `：${session.waitingFor}` : "";
-    const status = session.live ? `${state}${waitingFor}` : ago(session.updatedAt);
-    menu.showDetails({
-      title: session.title,
-      subtitle: [session.agent, session.model, status, session.cwd].filter(Boolean).join(" · "),
-      command: session.resume,
-    });
-    menu.showTranscript(session.id, session.live);
+    menu.showDetails(details(agent.session));
+    menu.showTranscript(agent.session.id, agent.session.live);
   },
 };
+
+function details(session: LiveSession): CellDetails {
+  const state = session.status ? STATUS_TEXT[session.status] : session.live ? "运行中" : "";
+  const waitingFor = session.status === "waiting" && session.waitingFor ? `：${session.waitingFor}` : "";
+  const status = session.live ? `${state}${waitingFor}` : ago(session.updatedAt);
+  return {
+    title: session.title,
+    subtitle: [session.agent, session.model, status, session.cwd].filter(Boolean).join(" · "),
+    command: session.resume,
+  };
+}
 
 let frameRequest: (() => void) | null = null;

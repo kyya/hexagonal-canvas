@@ -48,20 +48,23 @@ function uuid(n: number): string {
   return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 }
 
-const slug = `-${PROJECT.replace(/^\/+/, "").replaceAll("/", "-")}`;
+function slugOf(cwd: string): string {
+  return `-${cwd.replace(/^\/+/, "").replaceAll("/", "-")}`;
+}
+const slug = slugOf(PROJECT);
 
-export function claudeSessionFile(home: string, id: string, dir = ".claude"): string {
-  return join(home, dir, "projects", slug, `${id}.jsonl`);
+export function claudeSessionFile(home: string, id: string, dir = ".claude", cwd = PROJECT): string {
+  return join(home, dir, "projects", slugOf(cwd), `${id}.jsonl`);
 }
 
-function claudeLike(home: string, dir: string, id: string, at: number, prompt: string, model: string): void {
+function claudeLike(home: string, dir: string, id: string, at: number, prompt: string, model: string, cwd = PROJECT): void {
   write(
-    claudeSessionFile(home, id, dir),
+    claudeSessionFile(home, id, dir, cwd),
     jsonl([
-      { type: "user", cwd: PROJECT, sessionId: id, timestamp: new Date(at).toISOString(), message: { role: "user", content: prompt } },
+      { type: "user", cwd, sessionId: id, timestamp: new Date(at).toISOString(), message: { role: "user", content: prompt } },
       {
         type: "assistant",
-        cwd: PROJECT,
+        cwd,
         sessionId: id,
         timestamp: new Date(at + 5000).toISOString(),
         message: { id: `msg-${id}`, role: "assistant", model, content: [{ type: "text", text: "好的，已经处理完了。" }] },
@@ -238,7 +241,6 @@ export function registerLive(home: string, story: Story, pid: number): void {
     JSON.stringify({
       pid,
       sessionId,
-      cwd: PROJECT,
       startedAt: BASE,
       kind: "interactive",
       status: story.state,
@@ -267,4 +269,21 @@ export function appendClaudeReply(home: string, storyId: string, text: string): 
       message: { id: `msg-${Date.now()}`, role: "assistant", model: "claude-opus-5-5", content: [{ type: "text", text }] },
     }) + "\n",
   );
+}
+
+// Claude sessions in another project, so the canvas has several clusters (borders, banners, jumps).
+export function writeProject(home: string, cwd: string, firstN: number, prompts: string[]): Story[] {
+  return prompts.map((prompt, index) => {
+    const n = firstN + index;
+    const id = uuid(n);
+    claudeLike(home, ".claude", id, BASE + n * 60_000, prompt, "claude-opus-5-5", cwd);
+    return { id: `claude:${id}`, agent: "claude", state: "history" as const, label: prompt };
+  });
+}
+
+// Register a live Claude session for any story (e.g. one from writeProject) in the given state.
+export function registerLiveAs(home: string, story: Story, pid: number, state: LiveStatus, waitingFor?: string): Story {
+  const live = { ...story, state, waitingFor };
+  registerLive(home, live, pid);
+  return live;
 }

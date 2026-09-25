@@ -17,8 +17,15 @@ export type LiveSession = {
 export type ProjectLabel = {
   name: string;
   cwd: string;
+  // Where the banner hangs: the hex just above the cluster's top ring.
   col: number;
   row: number;
+  // The cluster's centre hex and ring radius, for focusing the whole project.
+  centre: { col: number; row: number };
+  radius: number;
+  total: number;
+  live: number;
+  waiting: number;
 };
 
 export type Layout = {
@@ -128,20 +135,50 @@ export function place(sessions: ApiSession[]): Layout {
       const session = list[index];
       if (session) placed.push({ ...session, col: cell.col, row: cell.row });
     });
-    labels.push({ name: projectName(cwd) || "Unknown project", cwd, col: centre.col, row: centre.row - radius });
+    labels.push({
+      name: projectName(cwd) || "Unknown project",
+      cwd,
+      col: centre.col,
+      row: centre.row - radius,
+      centre,
+      radius,
+      total: list.length,
+      live: list.filter((session) => session.live).length,
+      waiting: list.filter((session) => session.status === "waiting").length,
+    });
     shelfCol += 2 * radius + 2;
   }
   return { sessions: placed, labels };
 }
 
-export function connectLiveSessions(onUpdate: (layout: Layout) => void): void {
-  const source = new EventSource("/api/sessions/stream");
+// One EventSource for the page; every module that cares about sessions subscribes to the layout.
+const EMPTY: Layout = { sessions: [], labels: [] };
+const listeners = new Set<(layout: Layout) => void>();
+let latest: Layout = EMPTY;
+let source: EventSource | null = null;
+
+function connect(): void {
+  source = new EventSource("/api/sessions/stream");
   source.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data) as { sessions?: ApiSession[] };
-      onUpdate(place(payload.sessions ?? []));
+      latest = place(payload.sessions ?? []);
     } catch {
-      onUpdate({ sessions: [], labels: [] });
+      latest = EMPTY;
     }
+    for (const listener of listeners) listener(latest);
   };
+}
+
+export function subscribeLayout(listener: (layout: Layout) => void): () => void {
+  listeners.add(listener);
+  if (!source) connect();
+  else listener(latest);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function currentLayout(): Layout {
+  return latest;
 }
