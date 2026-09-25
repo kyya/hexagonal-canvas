@@ -46,8 +46,8 @@ export function startMinimap(root: HTMLElement): void {
   const toWorld = (x: number, y: number) => ({ x: fit.minX + (x - fit.offsetX) / fit.scale, y: fit.minY + (y - fit.offsetY) / fit.scale });
 
   const draw = () => {
-    const camera = view().camera();
-    const key = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.zoom.toFixed(3)},${layout.sessions.length},${window.innerWidth},${window.innerHeight}`;
+    const bounds = view().viewBounds();
+    const key = `${bounds.x.toFixed(1)},${bounds.y.toFixed(1)},${bounds.width.toFixed(1)},${bounds.height.toFixed(1)},${layout.sessions.length}`;
     if (key === lastKey) return;
     lastKey = key;
     ctx.setTransform(2, 0, 0, 2, 0, 0);
@@ -62,8 +62,8 @@ export function startMinimap(root: HTMLElement): void {
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.fill();
     }
-    const topLeft = toMap(camera.x, camera.y);
-    const bottomRight = toMap(camera.x + window.innerWidth / camera.zoom, camera.y + window.innerHeight / camera.zoom);
+    const topLeft = toMap(bounds.x, bounds.y);
+    const bottomRight = toMap(bounds.x + bounds.width, bounds.y + bounds.height);
     ctx.strokeStyle = "rgba(17, 24, 39, 0.7)";
     ctx.lineWidth = 1.2;
     // Keep the frame on the map even when the view is wider than everything on it.

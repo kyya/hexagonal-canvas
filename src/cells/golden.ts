@@ -2,43 +2,101 @@
 // (the radius of its inscribed circle, half the cell's width):
 //
 //   apothem : icon radius           =  φ² : 1
-//   apothem : badge distance        =  φ  : 1   (badge centre from the icon centre)
+//   apothem : safe margin           =  φ³ : 1   (text keep-out band along every edge)
 //   icon radius : badge radius      =  φ² : 1
 //   badge radius : badge outline    =  φ³ : 1
 //   badge diameter : glyph size     =  φ  : 1
-//   apothem : yield offset          =  φ  : 1   (yield number centre below the icon centre)
 //   icon radius : yield font        =  φ  : 1
 //
+// Text safe zone: anything that carries text (the waiting badge, yield numbers, pin notes) must
+// lie entirely inside the hex shrunk by the safe margin, so no glyph crowds an edge. The badge sits
+// on the diagonal of a golden rectangle (rise : run = φ : 1), top-right, as far out as the safe zone
+// allows; the yield number rides the icon's bottom edge like an app-icon badge.
+//
 // A session's state is a soft tint filling the hex. The tints breathe with periods that are powers
-// of φ seconds, and every opacity is a negative power of φ. Only the waiting state adds a small
-// badge, so it can be recognised without relying on colour; the badge sits on the diagonal of a
-// golden rectangle (rise : run = φ : 1), top-right of the icon.
+// of φ seconds, and every opacity is a negative power of φ. Only the waiting state adds the badge,
+// so it can be recognised without relying on colour.
 export const PHI = (1 + Math.sqrt(5)) / 2;
 
 export type CellGeometry = {
+  // Vertical foreshortening of the ground: 1 in the top-down view, φ⁻¹ fully tilted (see TILT).
+  squash: number;
   iconSize: number;
+  // Apothem of the text safe zone: the hex shrunk by apothem / φ³ on every side.
+  safeApothem: number;
   badgeDistance: number;
   badgeAngle: number;
   badgeRadius: number;
   badgeOutline: number;
   badgeGlyph: number;
+  // Yield number: centre below the icon centre, font size, pill height.
   yieldOffset: number;
   yieldFont: number;
+  yieldHeight: number;
+  // Map pin: tack head radius and centre (above the cell centre), tip, and the note line below.
+  pinHeadRadius: number;
+  pinHeadY: number;
+  pinTipY: number;
+  noteOffset: number;
+  noteFont: number;
 };
 
-export function cellGeometry(apothem: number): CellGeometry {
+// Positions are offsets from the cell centre on the ground. In the tilted view the hex is
+// foreshortened by `squash`: the icon and the waiting badge lie on it and tilt with it, so their
+// ground geometry holds as is. Upright text (yield numbers, pin notes) is anchored at a
+// foreshortened offset and sized with safeHalfWidth, which reads `squash` from the geometry.
+export function cellGeometry(apothem: number, squash = 1): CellGeometry {
   const iconRadius = apothem / PHI ** 2;
+  const safeApothem = apothem - apothem / PHI ** 3;
   const badgeRadius = iconRadius / PHI ** 2;
+  const badgeOutline = badgeRadius / PHI ** 3;
+  const badgeAngle = -Math.atan(PHI);
+  const yieldFont = iconRadius / PHI;
+  const pinHeadRadius = iconRadius / PHI ** 2;
+  const pinHeadY = -iconRadius / PHI;
   return {
+    squash,
     iconSize: iconRadius * 2,
-    badgeDistance: apothem / PHI,
-    badgeAngle: -Math.atan(PHI),
+    safeApothem,
+    // Push the badge out along its diagonal until its outline touches the safe zone.
+    badgeDistance: badgeDistanceWithin(safeApothem, badgeAngle, badgeRadius + badgeOutline),
+    badgeAngle,
     badgeRadius,
-    badgeOutline: badgeRadius / PHI ** 3,
+    badgeOutline,
     badgeGlyph: (badgeRadius * 2) / PHI,
-    yieldOffset: apothem / PHI,
-    yieldFont: iconRadius / PHI,
+    yieldOffset: iconRadius,
+    yieldFont,
+    yieldHeight: yieldFont * PHI,
+    pinHeadRadius,
+    pinHeadY,
+    pinTipY: pinHeadY + pinHeadRadius * PHI ** 2,
+    noteOffset: iconRadius,
+    noteFont: yieldFont,
   };
+}
+
+// Pointy-top hex edges have outward normals at 0°, ±60°, ±120° and 180°. A point is inside a hex
+// of apothem `a` when its projection on every normal is at most `a`.
+const EDGE_NORMALS = [0, 60, 120, 180, 240, 300].map((deg) => [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)] as const);
+
+// Largest distance along `angle` at which a disc of `radius` still fits inside the hex of apothem `a`.
+function badgeDistanceWithin(a: number, angle: number, radius: number): number {
+  const reach = Math.max(...EDGE_NORMALS.map(([nx, ny]) => Math.cos(angle) * nx + Math.sin(angle) * ny));
+  return (a - radius) / reach;
+}
+
+// How far a point (relative to the cell centre) is inside the hex of apothem `a` (negative = outside),
+// measured on the ground: with `squash` < 1, (x, y) is a screen offset in the tilted view.
+export function insetOf(a: number, x: number, y: number, squash = 1): number {
+  return a - Math.max(...EDGE_NORMALS.map(([nx, ny]) => x * nx + (y / squash) * ny));
+}
+
+// Half the widest text box, centred horizontally, that fits inside the safe zone while spanning
+// vertical offsets `top` … `bottom` (screen offsets from the cell centre).
+export function safeHalfWidth(g: Pick<CellGeometry, "safeApothem"> & { squash?: number }, top: number, bottom: number): number {
+  const farthest = Math.max(Math.abs(top), Math.abs(bottom)) / (g.squash ?? 1);
+  // Vertical edges bound |x| by the apothem; slanted edges by 0.5|x| + (√3/2)|y| ≤ apothem.
+  return Math.max(0, Math.min(g.safeApothem, 2 * (g.safeApothem - (Math.sqrt(3) / 2) * farthest)));
 }
 
 // φ^-n: 0.618, 0.382, 0.236, 0.146, 0.090 …
@@ -82,3 +140,45 @@ export const FOG = {
 
 // Strategic view (Civ's 2D map): below zoom φ⁻¹, cells become flat colour and icons are dropped.
 export const STRATEGIC_ZOOM = 1 / PHI;
+
+// Tilted view (Civ's default camera, key T): the ground is foreshortened to φ⁻¹ of its height
+// (cos θ = φ⁻¹, θ ≈ 51.8°), so a height h stands h · sin θ = h · φ^-½ tall on screen. Sessions rise
+// as hex prisms; icons lie on their top faces, tilted with the ground, while text stands upright. The camera tilts over φ⁻¹ s, and the tilt
+// eases out as you zoom towards the strategic view, which is always flat.
+export const TILT = {
+  squash: 1 / PHI,
+  glideMs: 1000 / PHI,
+} as const;
+
+// Foreshortening for a tilt `amount` (0 top-down … 1 tilted) at camera `zoom`.
+export function tiltSquash(amount: number, zoom: number): number {
+  const fade = Math.min(1, Math.max(0, (zoom - STRATEGIC_ZOOM) / (1 - STRATEGIC_ZOOM)));
+  return 1 - Math.min(1, Math.max(0, amount)) * fade * (1 - TILT.squash);
+}
+
+// On-screen height of a unit of prism height, for a foreshortening `squash`.
+export function tiltRise(squash: number): number {
+  return Math.sqrt(Math.max(0, 1 - squash * squash));
+}
+
+// Prism height of a session: a plinth of apothem / φ³, rising towards the apothem with its message
+// count (log scale, relative to the busiest session), so long conversations stand out like hills.
+export function prismHeight(apothem: number, messages: number, maxMessages: number): number {
+  const base = apothem / PHI ** 3;
+  const top = apothem;
+  const share = maxMessages > 0 ? Math.log1p(Math.max(0, messages)) / Math.log1p(maxMessages) : 0;
+  return base + (top - base) * Math.min(1, share);
+}
+
+// Sticker look for agent icons: a white die-cut border hugging the logo's silhouette (concavities
+// narrower than a few borders are closed, like a real cut line), resting on the cell with a soft
+// shadow cast down and to the right, away from the upper-left light that shades the prisms.
+// Sizes are fractions of the icon radius; the shadow is φ⁻³ black.
+export const STICKER = {
+  border: phiFade(4),
+  // Concavities up to this many borders wide are closed by the cut line.
+  closing: PHI ** 2,
+  shadowBlur: phiFade(4) * PHI,
+  shadowOffset: phiFade(4) / PHI,
+  shadowAlpha: phiFade(3),
+} as const;

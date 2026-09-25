@@ -32,6 +32,14 @@ export function drawPlacedCell(placed: PlacedCell, frame: CellFrame): void {
   placed.module.draw(placed.cell, frame);
 }
 
+export function drawUnderlays(frame: OverlayFrame): void {
+  for (const module of modules) module.underlay?.(frame);
+}
+
+export function cellHeight(placed: PlacedCell, apothem: number): number {
+  return placed.module.height?.(placed.cell, apothem) ?? 0;
+}
+
 export function drawOverlays(frame: OverlayFrame): void {
   for (const module of modules) module.overlay?.(frame);
 }

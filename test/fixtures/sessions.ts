@@ -343,3 +343,22 @@ export function writeGrokFamily(home: string, firstN: number): { parent: Story; 
   const story = (id: string, label: string): Story => ({ id: `grok:${id}`, agent: "grok", state: "history", label });
   return { parent: story(parentId, "Grok 编排任务"), child: story(childId, "Grok 子代理：查文档") };
 }
+
+// A Claude session with `turns` messages (half user, half assistant), for worst-case yield numbers.
+export function writeChatty(home: string, n: number, turns: number, prompt: string): Story {
+  const id = uuid(n);
+  const at = BASE + n * 60_000;
+  const rows = Array.from({ length: turns }, (_, i) =>
+    i % 2 === 0
+      ? { type: "user", cwd: PROJECT, sessionId: id, timestamp: new Date(at + i * 1000).toISOString(), message: { role: "user", content: i === 0 ? prompt : `第 ${i} 轮` } }
+      : {
+          type: "assistant",
+          cwd: PROJECT,
+          sessionId: id,
+          timestamp: new Date(at + i * 1000).toISOString(),
+          message: { id: `msg-${id}-${i}`, role: "assistant", model: "claude-opus-5-5", content: [{ type: "text", text: "好的" }] },
+        },
+  );
+  write(claudeSessionFile(home, id), jsonl(rows));
+  return { id: `claude:${id}`, agent: "claude", state: "history", label: prompt };
+}

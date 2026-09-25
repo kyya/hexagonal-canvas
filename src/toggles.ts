@@ -1,5 +1,5 @@
-// Small persisted on/off switches for canvas overlays (e.g. the per-cell yield numbers).
-export type ToggleId = "yields";
+// Small persisted on/off switches for canvas overlays and views (yield numbers, the tilted camera).
+export type ToggleId = "yields" | "tilt";
 
 const listeners = new Set<() => void>();
 const state = new Map<ToggleId, boolean>();

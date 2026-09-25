@@ -33,7 +33,7 @@ breathing all derive from φ, and the test fails if one drifts or if drawing cod
 `pnpm dev` also starts a small local server (`server/`) that finds every coding-agent session on
 this machine and puts one on each hex, grouped by project. A running session tints its hex and
 breathes: still pale green when idle, shallow quick blue breaths while working, deep slow amber
-breaths when it is waiting on you. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
+breaths when it is waiting on you. Agent icons look like stickers — a white die-cut border and a soft shadow. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
 command and the whole conversation.
 
 ### Finding your way
@@ -51,6 +51,10 @@ command and the whole conversation.
 - **Strategic view**: zoom out past φ⁻¹ and cells become flat colour blocks without icons, like
   Civ's 2D map; the **minimap** (bottom-left) shows everything and moves the camera on click or drag.
 - **Fog of war**: history sessions untouched for 30 days are veiled in grey (state lens).
+- **Tilted view** (`T` or the 倾斜 chip): tilt the camera like Civ's default view. The ground is
+  foreshortened to φ⁻¹ (about 52°), every session stands as a hex prism that rises with its message
+  count, icons and the waiting badge lie on the tops and tilt with them, and text stays upright to read. Zooming out towards the strategic view levels the
+  map again. The choice is remembered.
 
 ### Notes and search
 
@@ -62,9 +66,9 @@ command and the whole conversation.
 
 ### History
 
-- **Relations**: a line joins each session to the one it came from — solid with an arrow for a
-  spawned sub-agent (Codex `thread_spawn`, Grok sub-agents), dashed for a Codex fork. The menu and
-  tooltip say "分叉自 / 派生自" the parent.
+- **Relations**: hover a session (or open its menu) to see its family — a straight line to the
+  session it came from, solid with an arrow for a spawned sub-agent (Codex `thread_spawn`, Grok
+  sub-agents), dashed for a Codex fork. The menu and tooltip say "分叉自 / 派生自" the parent.
 - **Replay** (`R` or 回放): the map rewinds to the first session and grows back one session at a
   time, like Civ's end-game replay. Play, scrub, or × to return to live.
 

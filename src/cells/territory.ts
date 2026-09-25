@@ -102,41 +102,47 @@ function drawBanners(frame: OverlayFrame): void {
     const waitingWidth = countWidth(waitingText);
     const width = pad + nameWidth + gap * 2 + totalWidth + (liveWidth ? gap * 2 + liveWidth : 0) + (waitingWidth ? gap * 2 + waitingWidth : 0) + pad;
     const { x: hexX, y: hexY } = frame.origin(label.col, label.row);
-    const x = hexX + frame.width / 2 - width / 2;
-    const y = hexY - height - gap * 2;
-    banners.push({ label, x, y, width, height });
+    // Tilted, the banner stands upright above the top of the cluster's (raised) top cell.
+    const anchorX = hexX + frame.width / 2;
+    const anchorY = hexY - frame.lift(label.col, label.row);
+    const x = anchorX - width / 2;
+    const y = anchorY - height - gap * 2;
+    // Hit area on the ground plane: upright offsets from the anchor shrink by the foreshortening.
+    banners.push({ label, x, y: anchorY + (y - anchorY) / frame.squash, width, height: height / frame.squash });
+    frame.upright(anchorX, anchorY, () => {
 
-    ctx.fillStyle = "#fff";
-    ctx.strokeStyle = `hsla(${hue}, 58%, 46%, ${phiFade(1)})`;
-    ctx.lineWidth = unit;
-    roundRect(ctx, x, y, width, height, height / 2);
-    ctx.fill();
-    ctx.stroke();
-
-    const mid = y + height / 2;
-    let cursor = x + pad;
-    ctx.textAlign = "left";
-    ctx.font = `600 ${font}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillStyle = `hsl(${hue}, 45%, 30%)`;
-    ctx.fillText(label.name, cursor, mid);
-    cursor += nameWidth + gap * 2;
-    ctx.font = `500 ${font}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
-    ctx.fillText(total, cursor, mid);
-    cursor += totalWidth;
-    // Running and waiting counts: a dot in the state's colour, then the number.
-    for (const [text, colour] of [[liveText, LIVE_DOT], [waitingText, WAITING]] as const) {
-      if (!text) continue;
-      cursor += gap * 2;
-      ctx.fillStyle = colour;
-      ctx.beginPath();
-      ctx.arc(cursor + dot, mid, dot, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = `hsla(${hue}, 58%, 46%, ${phiFade(1)})`;
+      ctx.lineWidth = unit;
+      roundRect(ctx, x, y, width, height, height / 2);
       ctx.fill();
-      cursor += dot * 2 + gap;
-      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      ctx.fillText(text, cursor, mid);
-      cursor += ctx.measureText(text).width;
-    }
+      ctx.stroke();
+
+      const mid = y + height / 2;
+      let cursor = x + pad;
+      ctx.textAlign = "left";
+      ctx.font = `600 ${font}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = `hsl(${hue}, 45%, 30%)`;
+      ctx.fillText(label.name, cursor, mid);
+      cursor += nameWidth + gap * 2;
+      ctx.font = `500 ${font}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.fillText(total, cursor, mid);
+      cursor += totalWidth;
+      // Running and waiting counts: a dot in the state's colour, then the number.
+      for (const [text, colour] of [[liveText, LIVE_DOT], [waitingText, WAITING]] as const) {
+        if (!text) continue;
+        cursor += gap * 2;
+        ctx.fillStyle = colour;
+        ctx.beginPath();
+        ctx.arc(cursor + dot, mid, dot, 0, Math.PI * 2);
+        ctx.fill();
+        cursor += dot * 2 + gap;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillText(text, cursor, mid);
+        cursor += ctx.measureText(text).width;
+      }
+    });
   }
   ctx.restore();
 }
@@ -154,8 +160,12 @@ export const territory: CellModule = {
     return [];
   },
   draw() {},
+  // Borders lie on the ground: tilted, they go under the prisms; top-down, over the cell tints.
+  underlay(frame) {
+    if (frame.squash < 1) drawBorders(frame, layout.sessions);
+  },
   overlay(frame) {
-    drawBorders(frame, layout.sessions);
+    if (frame.squash === 1) drawBorders(frame, layout.sessions);
     drawBanners(frame);
   },
   click(x, y) {

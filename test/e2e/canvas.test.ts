@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import type { ApiSession } from "../../src/live.ts";
 import { addClaudeSession, appendClaudeReply, PROJECT, registerLive } from "../fixtures/sessions.ts";
+import { STICKER } from "../../src/cells/golden.ts";
 import { OUTPUT_SCALE } from "../harness.ts";
 import { eventually, geometry, startScene, type Scene } from "./scene.ts";
 
@@ -61,6 +62,26 @@ describe("canvas end to end", () => {
       // Only the soft state tint may be there (well under φ⁻² opacity), never a solid mark.
       assert.ok(other.alpha < 128, `${state} must not have a badge, got alpha ${other.alpha} (${other.rgb})`);
     }
+  });
+
+  test("icons look like stickers: a white die-cut border and a soft shadow cast down-right", async () => {
+    // On the amber waiting cell, just outside the Claude glyph's reach (the keyline circle), the
+    // backing shows white where the bare icon would show the tint.
+    const waiting = scene.story("waiting");
+    const reach = geometry.iconSize / 2;
+    const border = reach * STICKER.border;
+    const ring = await Promise.all(
+      Array.from({ length: 36 }, (_, i) => {
+        const angle = (i / 36) * Math.PI * 2;
+        return scene.pixel(waiting.id, Math.cos(angle) * (reach + border / 2), Math.sin(angle) * (reach + border / 2));
+      }),
+    );
+    const white = ring.filter(({ rgb }) => rgb.every((c) => c >= 245)).length;
+    assert.ok(white >= 18, `the sticker border should ring the icon, ${white}/36 samples white`);
+    // The shadow falls away from the upper-left light: darker below-right than above-left.
+    const shade = (dx: number, dy: number) => scene.pixel(waiting.id, dx, dy).then(({ rgb }) => rgb[0] + rgb[1] + rgb[2]);
+    const out = (reach + border * 2) * Math.SQRT1_2;
+    assert.ok((await shade(out, out)) < (await shade(-out, -out)) - 6, "the shadow is cast down and to the right");
   });
 
   test("the tab title counts sessions waiting on you", async () => {

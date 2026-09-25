@@ -4,7 +4,7 @@ import { armPop, popScale } from "./pop";
 import { fogged, lens, lensTint, subscribeLens } from "../lens";
 import { searchQuery, sessionMatches, subscribeSearch } from "../search";
 import { isOn, subscribeToggles } from "../toggles";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, PHI, phiFade, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, phiFade, prismHeight, safeHalfWidth, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
 import { projectHue } from "./palette";
 import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 
@@ -95,20 +95,36 @@ function drawStatusBackground(ctx: CanvasRenderingContext2D, frame: CellFrame, s
   }
 }
 
-// Civ-style yield under the icon: the session's message count, in a small pill.
+// Compact counts so the pill stays short: 999, 1.2k, 12k, 120k.
+function compactCount(value: number): string {
+  if (value < 1000) return String(value);
+  const thousands = value / 1000;
+  return `${thousands < 10 ? thousands.toFixed(1).replace(/\.0$/, "") : Math.round(thousands)}k`;
+}
+
+// Civ-style yield: the session's message count in a pill riding the icon's bottom edge, like an
+// app-icon badge. It is capped to the text safe zone, and the type shrinks before it would cross it.
+// Tilted, it stands upright where its anchor lands on the foreshortened hex.
 function drawYield(ctx: CanvasRenderingContext2D, g: CellGeometry, frame: CellFrame, messages: number): void {
-  const text = String(messages);
+  const text = compactCount(messages);
   const cx = frame.x + frame.width / 2;
-  const cy = frame.midY + g.yieldOffset;
+  const offset = g.yieldOffset * g.squash;
+  const cy = frame.midY + offset;
+  const maxWidth = 2 * safeHalfWidth(g, offset - g.yieldHeight / 2, offset + g.yieldHeight / 2);
   ctx.save();
-  ctx.font = `700 ${g.yieldFont}px ui-sans-serif, system-ui, sans-serif`;
+  let font = g.yieldFont;
+  ctx.font = `700 ${font}px ui-sans-serif, system-ui, sans-serif`;
+  let width = ctx.measureText(text).width + font;
+  if (width > maxWidth) {
+    font *= maxWidth / width;
+    ctx.font = `700 ${font}px ui-sans-serif, system-ui, sans-serif`;
+    width = maxWidth;
+  }
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const width = ctx.measureText(text).width + g.yieldFont;
-  const height = g.yieldFont * PHI;
   ctx.fillStyle = YIELD_BACKGROUND;
   ctx.beginPath();
-  ctx.roundRect(cx - width / 2, cy - height / 2, width, height, height / 2);
+  ctx.roundRect(cx - width / 2, cy - g.yieldHeight / 2, width, g.yieldHeight, g.yieldHeight / 2);
   ctx.fill();
   ctx.fillStyle = "#fff";
   ctx.fillText(text, cx, cy + 0.5);
@@ -188,21 +204,28 @@ export const agentStatus: CellModule = {
       if (tint) fillHex(ctx, frame, tint.colour, strategic ? Math.max(tint.alpha, phiFade(2)) : tint.alpha);
     }
 
-    const g = cellGeometry(frame.width / 2);
+    const g = cellGeometry(frame.width / 2, frame.squash);
+    const cx = frame.x + frame.width / 2;
     // The strategic view is flat colour: no icons, like Civ's 2D map.
     if (!strategic && icon && ready) {
-      const x = frame.x + frame.width / 2 - g.iconSize / 2;
-      const y = frame.midY - g.iconSize / 2;
+      // The icon lies on the top face, so tilted it is foreshortened with the ground.
       ctx.save();
       if (!session.live) ctx.globalAlpha = FADES.history;
-      drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
+      drawHexIcon(ctx, icon, cx - g.iconSize / 2, frame.midY - g.iconSize / 2, g.iconSize, scale, () => frameRequest?.());
       ctx.restore();
     }
     if (activeLens === "status" && fogged(session)) fillHex(ctx, frame, FOG_COLOUR, FOG.veil);
-    if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
-    if (!strategic && isOn("yields") && session.messages > 0) drawYield(ctx, g, frame, session.messages);
+    // The badge lies on the top face with the icon; the yield number stands upright to stay readable.
+    if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, cx, frame.midY, scale);
+    frame.upright(cx, frame.midY, () => {
+      if (!strategic && isOn("yields") && session.messages > 0) drawYield(ctx, g, frame, session.messages);
+    });
     // Search: everything that does not match fades back under a white veil.
     if (searchQuery() && !sessionMatches(session)) fillHex(ctx, frame, SEARCH_VEIL, phiFade(1) + phiFade(3));
+  },
+  height(cell, apothem) {
+    const agent = find(cell);
+    return agent ? prismHeight(apothem, agent.session.messages, maxMessages) : 0;
   },
   describe(cell) {
     const agent = find(cell);
