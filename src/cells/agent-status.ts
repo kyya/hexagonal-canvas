@@ -2,7 +2,7 @@ import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { connectLiveSessions, type Layout, type LiveSession, type ProjectLabel } from "../live";
 import { armPop, popScale } from "./pop";
 import { cellGeometry, PHI, phiFade, type CellGeometry } from "./golden";
-import type { BoardCell, CellModule } from "./types";
+import type { BoardCell, CellFrame, CellModule } from "./types";
 
 // Sizes come from the golden-ratio geometry in ./golden, measured from the hex's apothem.
 // History sessions are drawn faded so the running ones stand out.
@@ -10,6 +10,9 @@ const HISTORY_ALPHA = phiFade(2);
 const IDLE = "#22c55e";
 const BUSY = "#2563eb";
 const WAITING = "#f59e0b";
+// Waiting fills its whole hex with a breathing tint behind the icon.
+const WAITING_FILL = "#f59e0b";
+const WAITING_RING = true;
 // Busy spinner: one turn per φ seconds; the arc stretches between 2π/φ³ and 2π/φ every φ² seconds.
 const SPIN_MS = 1000 * PHI;
 const STRETCH_MS = 1000 * PHI ** 2;
@@ -83,20 +86,40 @@ function drawBusy(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy
   ctx.restore();
 }
 
+function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, side: number): void {
+  const rise = side / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + width / 2, y);
+  ctx.lineTo(x + width, y + rise);
+  ctx.lineTo(x + width, y + rise + side);
+  ctx.lineTo(x + width / 2, y + 2 * rise + side);
+  ctx.lineTo(x, y + rise + side);
+  ctx.lineTo(x, y + rise);
+  ctx.closePath();
+}
+
+function breathOf(now: number): number {
+  return (1 - Math.cos(((now % PULSE_MS) / PULSE_MS) * Math.PI * 2)) / 2;
+}
+
+// Drawn under the icon: the hex fills with a tint breathing between φ⁻⁴ and φ⁻² opacity.
+function drawWaitingFill(ctx: CanvasRenderingContext2D, frame: CellFrame, now: number): void {
+  ctx.save();
+  ctx.fillStyle = WAITING_FILL;
+  ctx.globalAlpha = phiFade(4) + (phiFade(2) - phiFade(4)) * breathOf(now);
+  hexPath(ctx, frame.x, frame.y, frame.width, frame.midY - frame.y);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Drawn over the icon: the ring breathes between φ⁻¹ and full opacity, in step with the fill.
 function drawWaiting(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number, now: number): void {
-  const t = (now % PULSE_MS) / PULSE_MS;
-  const breath = (1 - Math.cos(t * Math.PI * 2)) / 2;
-  const radius = g.ringRadius * scale;
+  if (!WAITING_RING) return;
   ctx.save();
   ctx.strokeStyle = WAITING;
-  // Ripple: leaves the ring at φ⁻² opacity and fades out as it spreads.
-  ctx.globalAlpha = phiFade(2) * (1 - t);
-  ctx.lineWidth = g.ringWidth * scale * (1 - t / PHI);
-  ring(ctx, cx, cy, radius + g.rippleSpread * scale * t);
-  // The ring itself breathes between φ⁻¹ and full opacity.
-  ctx.globalAlpha = phiFade(1) + (1 - phiFade(1)) * breath;
+  ctx.globalAlpha = phiFade(1) + (1 - phiFade(1)) * breathOf(now);
   ctx.lineWidth = g.ringWidth * scale;
-  ring(ctx, cx, cy, radius);
+  ring(ctx, cx, cy, g.ringRadius * scale);
   ctx.restore();
 }
 
@@ -186,6 +209,7 @@ export const agentStatus: CellModule = {
     const cx = x + g.iconSize / 2;
     const cy = frame.midY;
     const now = performance.now();
+    if (agent.session.live && status === "waiting") drawWaitingFill(ctx, frame, now);
     ctx.save();
     if (!agent.session.live) ctx.globalAlpha = HISTORY_ALPHA;
     drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());

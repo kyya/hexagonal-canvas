@@ -14,7 +14,6 @@ export type CellGeometry = {
   iconSize: number;
   ringRadius: number;
   ringWidth: number;
-  rippleSpread: number;
   badgeRadius: number;
   badgeOutline: number;
   badgeAngle: number;
@@ -29,8 +28,6 @@ export function cellGeometry(apothem: number): CellGeometry {
     iconSize: iconRadius * 2,
     ringRadius,
     ringWidth,
-    // The waiting ripple travels the golden section of the gap between ring and hex edge.
-    rippleSpread: (apothem - ringRadius) / PHI,
     badgeRadius,
     badgeOutline: ringWidth / PHI,
     badgeAngle: -Math.atan(PHI),

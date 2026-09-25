@@ -160,9 +160,7 @@ function sheetHtml(crops: Crop[], options: Options): string {
     h2{font-size:15px;margin:18px 0 8px}small{color:#999;font-weight:400;font-size:12px}
     .row,.grid{display:flex;gap:12px;flex-wrap:wrap}
     figure{margin:0;background:#fff;border:1px solid #e5e5e5;border-radius:10px;overflow:hidden}
-    img{display:block;width:200px;margin:0 auto;
-      /* The crop is the hex's bounding box; its corners belong to neighbouring cells. */
-      clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}figcaption{font-size:11px;color:#888;text-align:center;padding:4px 6px}
+    img{display:block;width:200px;margin:0 auto}figcaption{font-size:11px;color:#888;text-align:center;padding:4px 6px}
   </style></head><body>
     <h1>Hex cell storybook</h1>
     <p class="meta">zoom ${options.zoom}× · ${options.frames} 帧 / ${options.interval}ms · ${new Date().toISOString()}</p>
@@ -228,25 +226,38 @@ async function main(): Promise<void> {
       if (i < options.frames - 1) await page.waitForTimeout(options.interval);
     }
 
-    // Crop each cell's hex bounding box out of every frame. Cropping from shared frames keeps all
-    // cells on the same animation clock.
-    const cropPage = await browser.newPage({ viewport: { width, height } });
+    // Cut each cell out of every frame as a hexagon with transparent corners: the corners of a hex's
+    // bounding box belong to its neighbours, whose rings and icons would otherwise leak into the crop.
+    // Cropping from shared frames keeps all cells on the same animation clock.
+    const cellW = Math.round(RECT_W * options.zoom);
+    const cellH = Math.round(RECT_H * options.zoom);
+    const cropPage = await browser.newPage({ viewport: { width: cellW, height: cellH } });
     const crops: Crop[] = stories.map((story) => {
       const session = byId.get(story.id);
       return { story, col: session?.col ?? 0, row: session?.row ?? 0, frames: [], missing: !session };
     });
     for (const shot of shots) {
-      await cropPage.setContent(`<body style="margin:0"><img src="data:image/png;base64,${shot.toString("base64")}"></body>`);
+      await cropPage.setContent(`<html><body style="margin:0;background:transparent">
+        <div id="hex" style="position:absolute;left:0;top:0;width:${cellW}px;height:${cellH}px;overflow:hidden;
+          clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)">
+          <img id="frame" style="position:absolute" src="data:image/png;base64,${shot.toString("base64")}">
+        </div></body></html>`);
+      await cropPage.waitForFunction(() => (document.getElementById("frame") as HTMLImageElement | null)?.complete);
       for (const crop of crops) {
         if (crop.missing) continue;
         const centre = hexCentre(crop.col, crop.row);
-        const clip = {
-          x: Math.round((centre.x - HEX_RADIUS - camera.x) * options.zoom),
-          y: Math.round((centre.y - RECT_H / 2 - camera.y) * options.zoom),
-          width: Math.round(RECT_W * options.zoom),
-          height: Math.round(RECT_H * options.zoom),
-        };
-        crop.frames.push((await cropPage.screenshot({ clip })).toString("base64"));
+        const left = Math.round((centre.x - HEX_RADIUS - camera.x) * options.zoom);
+        const top = Math.round((centre.y - RECT_H / 2 - camera.y) * options.zoom);
+        await cropPage.evaluate(
+          ([x, y]) => {
+            const image = document.getElementById("frame") as HTMLImageElement;
+            image.style.left = `${-x}px`;
+            image.style.top = `${-y}px`;
+          },
+          [left, top],
+        );
+        const png = await cropPage.screenshot({ clip: { x: 0, y: 0, width: cellW, height: cellH }, omitBackground: true });
+        crop.frames.push(png.toString("base64"));
       }
     }
 

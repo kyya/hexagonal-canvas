@@ -23,6 +23,11 @@ git-ignored):
   then a grid with one faded history cell per agent.
 - `<state>-<agent>-<frame>.png` — each crop on its own (animated states keep every frame, static ones
   only frame 1), for side-by-side or before/after comparisons.
+
+Every crop is cut out as a hexagon with transparent corners. A cell's rectangular bounding box
+overlaps its six neighbours, so a plain rectangle would show slices of their rings and icons and make
+a clean cell look broken. When you build your own comparison page from the crops, keep them as they
+are (don't re-crop to a rectangle) and put them on a light background so the hex silhouette reads.
 - `manifest.json` — which session, cell (col,row) and files belong to each story.
 
 Live states (idle / busy / waiting) are always rendered with the Claude icon: Claude Code is the only
@@ -43,7 +48,7 @@ Send `sheet.png` to the user (SendUserFile with `display: "render"` when availab
 you see state by state. The point of the sheet is to look closely, so actually read the image and call
 out problems you notice, for example:
 
-- elements that collide (a badge sitting on the spinner arc, halo clipped by the hex edge);
+- elements that collide (a badge sitting on the spinner arc, a ring or fill running past the hex edge);
 - states that are too faint or too similar to tell apart at normal zoom;
 - **an empty hex in the history grid means that agent has no icon mapping** in `src/icons.ts`
   (`AGENT_SLUG`), even though its sessions are discovered;
