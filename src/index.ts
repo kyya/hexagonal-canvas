@@ -1,4 +1,5 @@
 import { drawOverlays, drawPlacedCell, openPlacedMenu, placedCellAt, placedCells, startCells } from "./cells/board";
+import { cellGeometry } from "./cells/golden";
 import type { CellDetails } from "./cells/types";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
@@ -579,7 +580,7 @@ function render(): void {
   }
 
   const occupied = new Set(placedCells().map(({ cell }) => hexId(cell.col, cell.row)));
-  const iconSize = 48;
+  const { iconSize } = cellGeometry(hexRadius);
   for (const cell of icons) {
     if (!cell.icon || occupied.has(cell.id)) continue;
     const { x, y } = hexOrigin(cell.col, cell.row);
