@@ -45,7 +45,7 @@ describe("lenses, strategic view and fog of war", () => {
   test("③ lenses: switching recolours every session and updates the legend", async () => {
     assert.equal(await lensTab("状态").getAttribute("aria-selected"), "true");
 
-    await lensTab("Agent").click();
+    await lensTab("工具").click();
     const codex = scene.story("history", "codex");
     const claude = scene.story("history", "claude");
     const at = async (id: string) => (await scene.pixel(id, 0, HEX_RADIUS * 0.75)).rgb;
@@ -54,7 +54,7 @@ describe("lenses, strategic view and fog of war", () => {
     assert.equal(closest(await at(claude.id), references), "claude");
     assert.equal(closest(await at(scene.story("history", "gemini").id), references), "gemini");
     const legend = scene.page.locator(".hud-legend");
-    for (const agent of ["claude", "codex", "gemini", "kimi"]) assert.match((await legend.textContent()) ?? "", new RegExp(agent));
+    for (const name of ["Claude Code", "Codex", "Gemini CLI", "Kimi Code"]) assert.ok(((await legend.textContent()) ?? "").includes(name), `legend lists ${name}`);
     await scene.shot("f3-lens-agent");
 
     // Recency: the two-day-old session glows stronger than the ninety-day-old one.

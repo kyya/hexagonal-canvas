@@ -1,5 +1,6 @@
 // Map search (Civ's map search): "/" or ⌘/Ctrl+K opens a box at the top; typing dims everything
 // that does not match, lists sessions and pins that do, and Enter flies to the selected one.
+import { agentName } from "../agents";
 import { currentLayout, subscribeLayout } from "../live";
 import { allPins, subscribePins } from "../pins";
 import { pinMatches, searchQuery, sessionMatches, setSearchQuery, type SearchHit } from "../search";
@@ -23,7 +24,7 @@ export function startSearch(root: HTMLElement): void {
   const box = document.createElement("div");
   box.className = "hud-search";
   box.hidden = true;
-  box.innerHTML = `<input class="hud-search-input" type="search" placeholder="搜索会话标题、项目、agent、模型、地图钉…" aria-label="搜索" />
+  box.innerHTML = `<input class="hud-search-input" type="search" placeholder="搜索会话标题、项目、工具、模型、地图钉…" aria-label="搜索" />
     <div class="hud-search-count"></div>
     <div class="hud-search-results" role="listbox"></div>`;
   root.append(opener, box);
@@ -66,7 +67,7 @@ export function startSearch(root: HTMLElement): void {
         meta.className = "hud-search-item-meta";
         if (hit.kind === "session") {
           title.textContent = hit.session.title;
-          meta.textContent = [hit.session.agent, projectName(hit.session.cwd)].filter(Boolean).join(" · ");
+          meta.textContent = [agentName(hit.session.agent), projectName(hit.session.cwd)].filter(Boolean).join(" · ");
         } else {
           title.textContent = `📍 ${hit.pin.note}`;
           meta.textContent = "地图钉";

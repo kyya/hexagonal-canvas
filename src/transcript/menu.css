@@ -1,6 +1,6 @@
 .hex-menu {
   position: fixed;
-  z-index: 2;
+  z-index: 4;
   width: min(400px, calc(100vw - 16px));
   padding: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -70,6 +70,35 @@
 }
 
 .hex-menu-command[data-copied="true"]::after {
+  content: " ✓";
+  color: #16a34a;
+}
+
+.hex-menu-links {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hex-menu-links button,
+.hex-menu-links a {
+  padding: 3px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.7);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.hex-menu-links button:hover,
+.hex-menu-links a:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.hex-menu-links button[data-copied="true"]::after {
   content: " ✓";
   color: #16a34a;
 }

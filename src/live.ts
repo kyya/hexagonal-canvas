@@ -186,24 +186,89 @@ function emit(): void {
   for (const listener of listeners) listener(latest);
 }
 
-function connect(): void {
-  subscribeReplay(emit);
-  source = new EventSource("/api/sessions/stream");
-  source.onmessage = (event) => {
+// Connection to the local server, for the HUD's loading, empty and "connection lost" states.
+// `received` turns true with the first snapshot and stays true, so a later drop reads as lost
+// rather than as loading.
+export type Connection = { state: "connecting" | "open" | "lost"; received: boolean };
+let connection: Connection = { state: "connecting", received: false };
+const connectionListeners = new Set<(value: Connection) => void>();
+// EventSource retries by itself after a dropped stream, but gives up for good on some errors
+// (e.g. an HTTP error response); then reconnect ourselves after this delay.
+const RECONNECT_MS = 2000;
+// The server sends a heartbeat every 5 s (server/index.ts). Silence for this long means the server
+// is gone even if the connection looks open (a proxy can keep it open): drop it and reconnect.
+const SILENCE_MS = 12_000;
+let lastHeard = 0;
+let watchdog = 0;
+
+function setConnection(next: Connection): void {
+  if (next.state === connection.state && next.received === connection.received) return;
+  connection = next;
+  for (const listener of connectionListeners) listener(connection);
+}
+
+export function currentConnection(): Connection {
+  return connection;
+}
+
+export function subscribeConnection(listener: (value: Connection) => void): () => void {
+  connectionListeners.add(listener);
+  listener(connection);
+  return () => {
+    connectionListeners.delete(listener);
+  };
+}
+
+function open(): void {
+  const current = new EventSource("/api/sessions/stream");
+  source = current;
+  lastHeard = Date.now();
+  current.addEventListener("ping", () => {
+    lastHeard = Date.now();
+    if (connection.received) setConnection({ state: "open", received: true });
+  });
+  current.onmessage = (event) => {
+    lastHeard = Date.now();
     try {
       const payload = JSON.parse(event.data) as { sessions?: ApiSession[] };
       raw = payload.sessions ?? [];
     } catch {
       raw = [];
     }
+    setConnection({ state: "open", received: true });
     emit();
   };
+  current.onerror = () => {
+    setConnection({ state: "lost", received: connection.received });
+    if (current.readyState === EventSource.CLOSED && source === current) {
+      source = null;
+      window.setTimeout(open, RECONNECT_MS);
+    }
+  };
+  window.clearInterval(watchdog);
+  watchdog = window.setInterval(() => {
+    if (source !== current || Date.now() - lastHeard < SILENCE_MS) return;
+    current.close();
+    source = null;
+    setConnection({ state: "lost", received: connection.received });
+    window.clearInterval(watchdog);
+    open();
+  }, SILENCE_MS / 4);
 }
+
+function connect(): void {
+  subscribeReplay(emit);
+  open();
+}
+
+let connected = false;
 
 export function subscribeLayout(listener: (layout: Layout) => void): () => void {
   listeners.add(listener);
-  if (!source) connect();
-  else listener(latest);
+  if (!connected) {
+    connected = true;
+    connect();
+  } else listener(latest);
   return () => {
     listeners.delete(listener);
   };

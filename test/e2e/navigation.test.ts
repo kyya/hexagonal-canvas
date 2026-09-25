@@ -155,7 +155,7 @@ describe("navigation and territory", () => {
     const tooltip = scene.page.locator("#hex-tooltip");
     await tooltip.waitFor({ state: "visible" });
     assert.equal(await tooltip.locator(".hex-tooltip-title").textContent(), "历史 Codex 会话");
-    assert.match((await tooltip.locator(".hex-tooltip-subtitle").textContent()) ?? "", /^codex · gpt-5\.5-codex · /);
+    assert.match((await tooltip.locator(".hex-tooltip-subtitle").textContent()) ?? "", /^Codex · gpt-5\.5-codex · /);
     const waiting = await scene.cellPoint(scene.story("waiting").id);
     await scene.page.mouse.move(waiting.cssX, waiting.cssY);
     await eventually("the tooltip to follow to the waiting cell", () => tooltip.locator(".hex-tooltip-subtitle").textContent(), (text) => /等你处理：input needed/.test(text ?? ""));

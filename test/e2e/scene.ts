@@ -126,6 +126,8 @@ async function buildScene(
   onBrowser(browser);
   const context = await browser.newContext({ viewport: VIEWPORT });
   await context.addInitScript((value: string) => {
+    // The first-visit help panel would cover the map: mark it seen (tests that want it clear this).
+    if (!sessionStorage.getItem("e2e-help-kept")) localStorage.setItem("hexagonal-canvas.help-seen", "1");
     if (!sessionStorage.getItem("e2e-camera-set")) {
       localStorage.setItem("hexagonal-canvas.camera", value);
       sessionStorage.setItem("e2e-camera-set", "1");

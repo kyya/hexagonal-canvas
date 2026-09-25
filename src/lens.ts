@@ -9,7 +9,7 @@ export type LensId = "status" | "recency" | "agent" | "model" | "messages";
 export const LENSES: { id: LensId; label: string; key: string }[] = [
   { id: "status", label: "状态", key: "1" },
   { id: "recency", label: "新旧", key: "2" },
-  { id: "agent", label: "Agent", key: "3" },
+  { id: "agent", label: "工具", key: "3" },
   { id: "model", label: "模型", key: "4" },
   { id: "messages", label: "消息量", key: "5" },
 ];

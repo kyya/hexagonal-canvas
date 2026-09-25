@@ -52,6 +52,8 @@ const rowStep = sideLength + hexHeight;
 const CHUNK_SIZE = 16;
 // Front faces of raised prisms: the lower-left face catches the light, the lower-right is in shade.
 const PRISM_LIT = "#f3f4f6";
+// Grid line opacity for a single hex outline.
+const GRID_ALPHA = 0.16;
 const PRISM_SHADE = "#e5e7eb";
 const CLICK_SLOP = 5;
 
@@ -103,6 +105,8 @@ let squash = 1;
 let rise = 0;
 // How far each placed cell's prism top is raised, in foreshortened world units, as last drawn.
 let lifts = new Map<string, number>();
+// Test and diagnostics hook: how many frames were drawn and how long the last one took.
+const renderStats = { frames: 0, lastMs: 0 };
 const selection = new Map<string, Hex>();
 let hover: Hex | null = null;
 // Last pointer position over the canvas, to re-pick the hovered hex when the camera tilts under it.
@@ -191,6 +195,7 @@ Object.assign(window, {
       return worldToScreen(x + hexRadius, y + sideLength - liftAt(col, row));
     },
     lift: (col: number, row: number) => liftAt(col, row),
+    renderStats: () => ({ ...renderStats }),
   },
 });
 
@@ -321,14 +326,27 @@ function openMenu(hex: Hex, x: number, y: number): void {
     return;
   }
   menu.hidden = false;
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-  const rect = menu.getBoundingClientRect();
+  placeMenu(hex, x, y);
+}
+
+// Put the menu beside the cell, not on it: to the right of the hex (left when there is no room),
+// top-aligned with the hex so the cell, its neighbours' icons and the project banner above stay in
+// view. Without room on either side (narrow windows) it falls back to the pointer, clamped.
+function placeMenu(hex: Hex, x: number, y: number): void {
   const pad = 8;
+  const gap = 12;
+  const { x: originX, y: originY } = hexOrigin(hex.col, hex.row);
+  const lift = liftAt(hex.col, hex.row);
+  const topLeft = worldToScreen(originX, originY - lift);
+  const bottomRight = worldToScreen(originX + hexRectangleWidth, originY + hexRectangleHeight - lift);
+  const rect = menu.getBoundingClientRect();
   let left = x;
-  let top = y;
-  if (rect.right > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - rect.width - pad);
-  if (rect.bottom > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - rect.height - pad);
+  if (bottomRight.x + gap + rect.width <= window.innerWidth - pad) left = bottomRight.x + gap;
+  else if (topLeft.x - gap - rect.width >= pad) left = topLeft.x - gap - rect.width;
+  const beside = left !== x;
+  let top = beside ? topLeft.y : y;
+  left = Math.min(Math.max(pad, left), Math.max(pad, window.innerWidth - rect.width - pad));
+  top = Math.min(Math.max(pad, top), Math.max(pad, window.innerHeight - rect.height - pad));
   menu.style.left = `${left}px`;
   menu.style.top = `${top}px`;
 }
@@ -404,6 +422,24 @@ function showDetails(details: CellDetails): void {
       });
     });
     menuDetails.append(button);
+  }
+  if (details.cwd) {
+    const cwd = details.cwd;
+    const actions = document.createElement("div");
+    actions.className = "hex-menu-links";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "复制项目路径";
+    copy.addEventListener("click", () => {
+      void navigator.clipboard?.writeText(cwd).then(() => {
+        copy.dataset.copied = "true";
+      });
+    });
+    const editor = document.createElement("a");
+    editor.textContent = "在 VS Code 中打开";
+    editor.href = `vscode://file${cwd.startsWith("/") ? "" : "/"}${encodeURI(cwd)}`;
+    actions.append(copy, editor);
+    menuDetails.append(actions);
   }
   menuDetails.hidden = false;
 }
@@ -856,7 +892,7 @@ function drawPrism(x: number, y: number, lift: number): void {
     ctx.stroke();
   };
   ctx.lineWidth = 1 / (outputScale * camera.zoom);
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.16)";
+  ctx.strokeStyle = `rgba(0, 0, 0, ${GRID_ALPHA})`;
   face(left, bottom, PRISM_LIT);
   face(bottom, right, PRISM_SHADE);
   ctx.fillStyle = "#fff";
@@ -865,6 +901,16 @@ function drawPrism(x: number, y: number, lift: number): void {
 }
 
 function render(): void {
+  const started = performance.now();
+  try {
+    draw();
+  } finally {
+    renderStats.frames++;
+    renderStats.lastMs = performance.now() - started;
+  }
+}
+
+function draw(): void {
   beginFrame();
   refreshTilt();
   const width = window.innerWidth;
@@ -894,11 +940,10 @@ function render(): void {
     }
   }
 
-  const placed = placedCells();
-  const occupied = new Set(placed.map(({ cell }) => hexId(cell.col, cell.row)));
+  const placed = [...placedCells()];
   const { iconSize } = cellGeometry(hexRadius);
   for (const cell of icons) {
-    if (!cell.icon || occupied.has(cell.id)) continue;
+    if (!cell.icon || placedCellAt(cell.col, cell.row)) continue;
     const icon = cell.icon;
     const { x, y } = hexOrigin(cell.col, cell.row);
     const ready = iconReady(icon, render);
@@ -918,7 +963,17 @@ function render(): void {
     }
     placed.sort((a, b) => a.cell.row - b.cell.row);
   }
-  const overlayFrame: OverlayFrame = { ctx, width: hexRectangleWidth, side: sideLength, zoom: camera.zoom, origin: hexOrigin, squash, lift: liftAt, upright };
+  const overlayFrame: OverlayFrame = {
+    ctx,
+    width: hexRectangleWidth,
+    side: sideLength,
+    zoom: camera.zoom,
+    origin: hexOrigin,
+    squash,
+    lift: liftAt,
+    upright,
+    visible: hexIntersectsView,
+  };
   drawUnderlays(overlayFrame);
   for (const item of placed) {
     if (!hexIntersectsView(item.cell.col, item.cell.row)) continue;
@@ -979,7 +1034,7 @@ function hexOrigin(col: number, row: number): { x: number; y: number } {
 
 function drawHexagon(x: number, y: number, fill = true): void {
   ctx.lineWidth = 1 / (outputScale * camera.zoom);
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.16)";
+  ctx.strokeStyle = `rgba(0, 0, 0, ${GRID_ALPHA})`;
   ctx.beginPath();
   ctx.moveTo(x + hexRadius, y);
   ctx.lineTo(x + hexRectangleWidth, y + hexHeight);

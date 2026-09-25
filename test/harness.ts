@@ -71,6 +71,9 @@ export type App = {
   standIn(): ChildProcess;
   sessions(): Promise<ApiSession[]>;
   waitForSessions(predicate: (sessions: ApiSession[]) => boolean, what: string, timeoutMs?: number): Promise<ApiSession[]>;
+  // Stop and restart only the API server (Vite keeps running), to test a dropped connection.
+  stopServer(): Promise<void>;
+  startServer(): void;
   stop(): void;
 };
 
@@ -89,7 +92,8 @@ export async function startApp(home: string): Promise<App> {
   const env = { ...process.env, HOME: home, HEX_API_PORT: String(apiPort), HEX_SCAN_PROCESSES: "0" };
   const spawnIn = (command: string, args: string[]) =>
     track(spawn(command, args, { cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"] }));
-  spawnIn(process.execPath, ["--experimental-strip-types", "--no-warnings", "server/index.ts"]);
+  const startServer = () => spawnIn(process.execPath, ["--experimental-strip-types", "--no-warnings", "server/index.ts"]);
+  let server = startServer();
   spawnIn(process.execPath, ["node_modules/vite/bin/vite.js", "--port", String(webPort), "--strictPort"]);
   const base = `http://127.0.0.1:${webPort}`;
 
@@ -128,6 +132,15 @@ export async function startApp(home: string): Promise<App> {
     standIn: () => track(spawn("sleep", ["3600"], { stdio: "ignore" })),
     sessions,
     waitForSessions,
+    async stopServer() {
+      if (server.exitCode !== null) return;
+      const exited = new Promise((done) => server.once("exit", done));
+      server.kill();
+      await exited;
+    },
+    startServer() {
+      server = startServer();
+    },
     stop,
   };
 }

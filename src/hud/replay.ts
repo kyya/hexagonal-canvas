@@ -2,7 +2,7 @@
 // Civ's turns, each step reveals the next session in creation order, so bursts and quiet weeks
 // replay at the same pace; play sweeps every session in φ⁴ seconds, the slider scrubs, × exits.
 import { PHI } from "../cells/golden";
-import { sessionTimes } from "../live";
+import { sessionTimes, subscribeLayout } from "../live";
 import { replayState, setReplay, subscribeReplay } from "../replay";
 
 const SWEEP_MS = 1000 * PHI ** 4;
@@ -75,10 +75,15 @@ export function startReplay(root: HTMLElement): void {
     setReplay({ active: false, playing: false });
   };
 
+  // Nothing to replay until there are sessions.
+  const refreshOpener = () => {
+    opener.hidden = replayState().active || times().length === 0;
+  };
+  subscribeLayout(refreshOpener);
   subscribeReplay(() => {
     const state = replayState();
     bar.hidden = !state.active;
-    opener.hidden = state.active;
+    refreshOpener();
     play.textContent = state.playing ? "⏸" : "▶";
     play.setAttribute("aria-label", state.playing ? "暂停" : "播放");
     slider.max = String(Math.max(1, times().length));
@@ -96,6 +101,7 @@ export function startReplay(root: HTMLElement): void {
   for (const element of [opener, bar]) element.addEventListener("pointerdown", (event) => event.stopPropagation());
   window.addEventListener("keydown", (event) => {
     if (event.key.toLowerCase() !== "r" || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+    if (!replayState().active && times().length === 0) return;
     event.preventDefault();
     if (replayState().active) exitReplay();
     else openReplay();
