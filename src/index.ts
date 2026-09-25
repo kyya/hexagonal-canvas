@@ -1,7 +1,9 @@
 import {
+  cellHeight,
   clickAt,
   describePlaced,
   drawOverlays,
+  drawUnderlays,
   openEmptyMenu,
   drawPlacedCell,
   openPlacedMenu,
@@ -15,8 +17,9 @@ import { startHud } from "./hud/hud";
 import { currentLayout } from "./live";
 import { setHovered, setOpened } from "./focus";
 import { installView } from "./view";
-import { cellGeometry, PHI } from "./cells/golden";
-import type { CellDetails, CellForm, CellMenu } from "./cells/types";
+import { cellGeometry, PHI, tiltRise, tiltSquash } from "./cells/golden";
+import type { CellDetails, CellForm, CellMenu, OverlayFrame } from "./cells/types";
+import { subscribeTilt, tiltAmount } from "./tilt";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
 import { beginFrame, popScale, pumpPops } from "./cells/pop";
@@ -47,6 +50,9 @@ const hexRectangleWidth = 2 * hexRadius;
 const rowStep = sideLength + hexHeight;
 
 const CHUNK_SIZE = 16;
+// Front faces of raised prisms: the lower-left face catches the light, the lower-right is in shade.
+const PRISM_LIT = "#f3f4f6";
+const PRISM_SHADE = "#e5e7eb";
 const CLICK_SLOP = 5;
 
 type Hex = {
@@ -91,8 +97,16 @@ const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 3;
 const PAN_SPEED = 960;
 const camera = { x: 0, y: 0, zoom: 1 };
+// Tilted view: the ground is foreshortened vertically by `squash` about the middle of the screen, and
+// a unit of prism height stands `rise` tall. Top-down, squash is 1 and rise 0. Refreshed each render.
+let squash = 1;
+let rise = 0;
+// How far each placed cell's prism top is raised, in foreshortened world units, as last drawn.
+let lifts = new Map<string, number>();
 const selection = new Map<string, Hex>();
 let hover: Hex | null = null;
+// Last pointer position over the canvas, to re-pick the hovered hex when the camera tilts under it.
+let lastPointer: { x: number; y: number } | null = null;
 let pointer: Pointer | null = null;
 let suppressClick = false;
 
@@ -117,6 +131,7 @@ canvas.addEventListener("pointerup", onPointerUp);
 canvas.addEventListener("pointercancel", onPointerCancel);
 canvas.addEventListener("pointerleave", () => {
   hideTooltip();
+  lastPointer = null;
   setHovered(null);
 });
 menu.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -151,6 +166,10 @@ installView({
     const { x, y } = hexOrigin(col, row);
     return { x: x + hexRadius, y: y + sideLength };
   },
+  viewBounds() {
+    const height = window.innerHeight / (camera.zoom * squash);
+    return { x: camera.x, y: pivotY() - height / 2, width: window.innerWidth / camera.zoom, height };
+  },
   requestRender: () => render(),
   onRender: (listener) => renderListeners.add(listener),
 });
@@ -164,6 +183,14 @@ Object.assign(window, {
     relations: () => relationCurves(),
     inks: () => measuredInks(),
     focus: (col: number, row: number) => focusHex(col, row),
+    tilt: () => ({ squash, rise }),
+    // A world point on the ground, and the centre of a cell's (raised) top face, in CSS pixels.
+    project: (x: number, y: number) => worldToScreen(x, y),
+    cellCentre: (col: number, row: number) => {
+      const { x, y } = hexOrigin(col, row);
+      return worldToScreen(x + hexRadius, y + sideLength - liftAt(col, row));
+    },
+    lift: (col: number, row: number) => liftAt(col, row),
   },
 });
 
@@ -177,6 +204,15 @@ startCells(() => {
   render();
 });
 startHud();
+subscribeTilt(() => {
+  syncChunks();
+  render();
+  if (lastPointer && hover && !pointer) {
+    hover = pickHex(lastPointer.x, lastPointer.y);
+    setHovered(hover);
+    render();
+  }
+});
 
 function easeInOut(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -262,8 +298,7 @@ function onResize(): void {
 
 function onContextMenu(event: MouseEvent): void {
   event.preventDefault();
-  const world = screenToWorld(event.offsetX, event.offsetY);
-  const hex = pixelToHex(world.x, world.y);
+  const hex = pickHex(event.offsetX, event.offsetY);
   openMenu(hex, event.clientX, event.clientY);
 }
 
@@ -392,7 +427,7 @@ function onDocumentPointerDown(event: PointerEvent): void {
 
 function panByScreen(dx: number, dy: number): void {
   camera.x += dx / camera.zoom;
-  camera.y += dy / camera.zoom;
+  camera.y += dy / (camera.zoom * squash);
   saveCamera();
   syncChunks();
   render();
@@ -476,8 +511,7 @@ function onKeyDown(event: KeyboardEvent): void {
 function onPointerDown(event: PointerEvent): void {
   hideTooltip();
   if (event.button !== 0) return;
-  const downWorld = screenToWorld(event.offsetX, event.offsetY);
-  const hex = pixelToHex(downWorld.x, downWorld.y);
+  const hex = pickHex(event.offsetX, event.offsetY);
   const select = event.shiftKey;
   pointer = {
     id: event.pointerId,
@@ -496,7 +530,7 @@ function onPointerDown(event: PointerEvent): void {
 function onPointerMove(event: PointerEvent): void {
   if (pointer && pointer.id === event.pointerId && pointer.mode === "pan") {
     camera.x -= (event.clientX - pointer.x) / camera.zoom;
-    camera.y -= (event.clientY - pointer.y) / camera.zoom;
+    camera.y -= (event.clientY - pointer.y) / (camera.zoom * squash);
     pointer.x = event.clientX;
     pointer.y = event.clientY;
     saveCamera();
@@ -506,13 +540,12 @@ function onPointerMove(event: PointerEvent): void {
     const dx = event.clientX - pointer.startX;
     const dy = event.clientY - pointer.startY;
     if (dx * dx + dy * dy > CLICK_SLOP * CLICK_SLOP) {
-      const selectWorld = screenToWorld(event.offsetX, event.offsetY);
-      const hex = pixelToHex(selectWorld.x, selectWorld.y);
+      const hex = pickHex(event.offsetX, event.offsetY);
       selection.set(hexId(hex.col, hex.row), hex);
     }
   }
-  const hoverWorld = screenToWorld(event.offsetX, event.offsetY);
-  const next = pixelToHex(hoverWorld.x, hoverWorld.y);
+  lastPointer = { x: event.offsetX, y: event.offsetY };
+  const next = pickHex(event.offsetX, event.offsetY);
   // Re-arm on a new hex, and also when the tooltip was dismissed (a glide or click) while the
   // pointer stayed on the same hex.
   const moved = !hover || hover.col !== next.col || hover.row !== next.row;
@@ -651,11 +684,57 @@ function saveCamera(): void {
   );
 }
 
+function refreshTilt(): void {
+  squash = tiltSquash(tiltAmount(), camera.zoom);
+  rise = tiltRise(squash);
+}
+
+// The world y at the middle of the screen: the tilt pivots about it, so tilting keeps the centre put.
+function pivotY(): number {
+  return camera.y + window.innerHeight / 2 / camera.zoom;
+}
+
 function screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
   return {
     x: camera.x + screenX / camera.zoom,
-    y: camera.y + screenY / camera.zoom,
+    y: pivotY() + (screenY - window.innerHeight / 2) / (camera.zoom * squash),
   };
+}
+
+function worldToScreen(x: number, y: number): { x: number; y: number } {
+  return {
+    x: (x - camera.x) * camera.zoom,
+    y: window.innerHeight / 2 + (y - pivotY()) * camera.zoom * squash,
+  };
+}
+
+function liftAt(col: number, row: number): number {
+  return lifts.get(hexId(col, row)) ?? 0;
+}
+
+// The hex under a screen point. Tilted, a raised prism in front covers the ground behind it: a
+// prism's silhouette is its hex swept up by its lift, and the frontmost silhouette wins.
+function pickHex(screenX: number, screenY: number): Hex {
+  const world = screenToWorld(screenX, screenY);
+  const ground = pixelToHex(world.x, world.y);
+  if (lifts.size === 0) return ground;
+  const steps = 8;
+  let best: Hex | null = null;
+  for (let dRow = 3; dRow >= 0 && !best; dRow--) {
+    for (let dCol = -2; dCol <= 2 && !best; dCol++) {
+      const candidate = { col: ground.col + dCol, row: ground.row + dRow };
+      const lift = liftAt(candidate.col, candidate.row);
+      if (lift <= 0) continue;
+      for (let step = 0; step <= steps; step++) {
+        const hit = pixelToHex(world.x, world.y + (lift * step) / steps);
+        if (hit.col === candidate.col && hit.row === candidate.row) {
+          best = candidate;
+          break;
+        }
+      }
+    }
+  }
+  return best ?? ground;
 }
 
 function onWheel(event: WheelEvent): void {
@@ -665,8 +744,10 @@ function onWheel(event: WheelEvent): void {
   const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, camera.zoom * Math.exp(-delta * 0.0015)));
   const world = screenToWorld(event.offsetX, event.offsetY);
   camera.zoom = next;
+  // The tilt eases out towards the strategic zoom: keep the point under the pointer in place.
+  refreshTilt();
   camera.x = world.x - event.offsetX / camera.zoom;
-  camera.y = world.y - event.offsetY / camera.zoom;
+  camera.y = world.y - (event.offsetY - window.innerHeight / 2) / (camera.zoom * squash) - window.innerHeight / 2 / camera.zoom;
   saveCamera();
   syncChunks();
   render();
@@ -692,14 +773,26 @@ function generateChunk(col: number, row: number): Chunk {
   return { col, row, cells };
 }
 
-function visibleHexBounds(): { col0: number; col1: number; row0: number; row1: number } {
-  const viewW = window.innerWidth / camera.zoom;
-  const viewH = window.innerHeight / camera.zoom;
+// The ground rectangle on screen, widened below by the tallest prism so raised cells just under the
+// bottom edge still draw.
+function viewWorld(): { left: number; right: number; top: number; bottom: number } {
+  const halfHeight = window.innerHeight / 2 / (camera.zoom * squash);
+  const reach = squash < 1 ? hexRadius * (rise / squash) : 0;
   return {
-    col0: Math.floor((camera.x - hexRectangleWidth) / hexRectangleWidth) - 1,
-    col1: Math.ceil((camera.x + viewW) / hexRectangleWidth) + 1,
-    row0: Math.floor((camera.y - hexRectangleHeight) / rowStep) - 1,
-    row1: Math.ceil((camera.y + viewH) / rowStep) + 1,
+    left: camera.x,
+    right: camera.x + window.innerWidth / camera.zoom,
+    top: pivotY() - halfHeight,
+    bottom: pivotY() + halfHeight + reach,
+  };
+}
+
+function visibleHexBounds(): { col0: number; col1: number; row0: number; row1: number } {
+  const view = viewWorld();
+  return {
+    col0: Math.floor((view.left - hexRectangleWidth) / hexRectangleWidth) - 1,
+    col1: Math.ceil(view.right / hexRectangleWidth) + 1,
+    row0: Math.floor((view.top - hexRectangleHeight) / rowStep) - 1,
+    row1: Math.ceil(view.bottom / rowStep) + 1,
   };
 }
 
@@ -726,22 +819,59 @@ function syncChunks(): void {
 
 function hexIntersectsView(col: number, row: number): boolean {
   const { x, y } = hexOrigin(col, row);
-  return (
-    x < camera.x + window.innerWidth / camera.zoom &&
-    x + hexRectangleWidth > camera.x &&
-    y < camera.y + window.innerHeight / camera.zoom &&
-    y + hexRectangleHeight > camera.y
-  );
+  const view = viewWorld();
+  return x < view.right && x + hexRectangleWidth > view.left && y < view.bottom && y + hexRectangleHeight > view.top;
+}
+
+// Draw upright content anchored at (cx, cy): offsets from the anchor are screen offsets.
+function upright(cx: number, cy: number, draw: () => void): void {
+  if (squash === 1) {
+    draw();
+    return;
+  }
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 1 / squash);
+  ctx.translate(-cx, -cy);
+  draw();
+  ctx.restore();
+}
+
+// Tilted view: the two front faces of a hex prism standing on (x, y), raised by `lift`, then its
+// opaque top face so it hides whatever stands behind it. Light comes from the upper left.
+function drawPrism(x: number, y: number, lift: number): void {
+  const right: [number, number] = [x + hexRectangleWidth, y + hexHeight + sideLength];
+  const bottom: [number, number] = [x + hexRadius, y + hexRectangleHeight];
+  const left: [number, number] = [x, y + hexHeight + sideLength];
+  const face = (a: [number, number], b: [number, number], colour: string) => {
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1] - lift);
+    ctx.lineTo(b[0], b[1] - lift);
+    ctx.lineTo(b[0], b[1]);
+    ctx.lineTo(a[0], a[1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  };
+  ctx.lineWidth = 1 / (outputScale * camera.zoom);
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.16)";
+  face(left, bottom, PRISM_LIT);
+  face(bottom, right, PRISM_SHADE);
+  ctx.fillStyle = "#fff";
+  drawHexagon(x, y - lift, true);
+  drawHexagon(x, y - lift, false);
 }
 
 function render(): void {
   beginFrame();
+  refreshTilt();
   const width = window.innerWidth;
   const height = window.innerHeight;
   ctx.setTransform(outputScale, 0, 0, outputScale, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  ctx.setTransform(outputScale * camera.zoom, 0, 0, outputScale * camera.zoom, 0, 0);
-  ctx.translate(-camera.x, -camera.y);
+  const zoomY = camera.zoom * squash;
+  ctx.setTransform(outputScale * camera.zoom, 0, 0, outputScale * zoomY, -outputScale * camera.zoom * camera.x, outputScale * (height / 2 - pivotY() * zoomY));
 
   ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
   for (const hex of selection.values()) {
@@ -763,36 +893,46 @@ function render(): void {
     }
   }
 
-  const occupied = new Set(placedCells().map(({ cell }) => hexId(cell.col, cell.row)));
+  const placed = placedCells();
+  const occupied = new Set(placed.map(({ cell }) => hexId(cell.col, cell.row)));
   const { iconSize } = cellGeometry(hexRadius);
   for (const cell of icons) {
     if (!cell.icon || occupied.has(cell.id)) continue;
+    const icon = cell.icon;
     const { x, y } = hexOrigin(cell.col, cell.row);
-    const ready = iconReady(cell.icon, render);
+    const ready = iconReady(icon, render);
     const scale = popScale(cell.id, ready);
     if (!ready || scale === 0) continue;
-    drawHexIcon(
-      ctx,
-      cell.icon,
-      x + hexRectangleWidth / 2 - iconSize / 2,
-      y + sideLength - iconSize / 2,
-      iconSize,
-      scale,
-      render,
-    );
+    const cx = x + hexRectangleWidth / 2;
+    const cy = y + sideLength;
+    upright(cx, cy, () => drawHexIcon(ctx, icon, cx - iconSize / 2, cy - iconSize / 2, iconSize, scale, render));
   }
-  for (const placed of placedCells()) {
-    if (!hexIntersectsView(placed.cell.col, placed.cell.row)) continue;
-    const { x, y } = hexOrigin(placed.cell.col, placed.cell.row);
-    drawPlacedCell(placed, { ctx, x, y, width: hexRectangleWidth, midY: y + sideLength, zoom: camera.zoom });
+
+  // Tilted, prisms are drawn back to front (by row) so nearer ones stand in front.
+  lifts = new Map();
+  if (squash < 1) {
+    for (const item of placed) {
+      const lift = (cellHeight(item, hexRadius) * rise) / squash;
+      if (lift > 0) lifts.set(hexId(item.cell.col, item.cell.row), lift);
+    }
+    placed.sort((a, b) => a.cell.row - b.cell.row);
   }
-  drawOverlays({ ctx, width: hexRectangleWidth, side: sideLength, zoom: camera.zoom, origin: hexOrigin });
+  const overlayFrame: OverlayFrame = { ctx, width: hexRectangleWidth, side: sideLength, zoom: camera.zoom, origin: hexOrigin, squash, lift: liftAt, upright };
+  drawUnderlays(overlayFrame);
+  for (const item of placed) {
+    if (!hexIntersectsView(item.cell.col, item.cell.row)) continue;
+    const { x, y } = hexOrigin(item.cell.col, item.cell.row);
+    const lift = liftAt(item.cell.col, item.cell.row);
+    if (lift > 0) drawPrism(x, y, lift);
+    drawPlacedCell(item, { ctx, x, y: y - lift, width: hexRectangleWidth, midY: y + sideLength - lift, zoom: camera.zoom, squash, upright });
+  }
+  drawOverlays(overlayFrame);
   pumpPops(render);
 
   if (hover) {
     const { x, y } = hexOrigin(hover.col, hover.row);
     ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
-    drawHexagon(x, y, true);
+    drawHexagon(x, y - liftAt(hover.col, hover.row), true);
   }
   for (const listener of renderListeners) listener();
 }

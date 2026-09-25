@@ -4,7 +4,7 @@ import { armPop, popScale } from "./pop";
 import { fogged, lens, lensTint, subscribeLens } from "../lens";
 import { searchQuery, sessionMatches, subscribeSearch } from "../search";
 import { isOn, subscribeToggles } from "../toggles";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, phiFade, safeHalfWidth, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, phiFade, prismHeight, safeHalfWidth, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
 import { projectHue } from "./palette";
 import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 
@@ -104,11 +104,13 @@ function compactCount(value: number): string {
 
 // Civ-style yield: the session's message count in a pill riding the icon's bottom edge, like an
 // app-icon badge. It is capped to the text safe zone, and the type shrinks before it would cross it.
+// Tilted, it stands upright where its anchor lands on the foreshortened hex.
 function drawYield(ctx: CanvasRenderingContext2D, g: CellGeometry, frame: CellFrame, messages: number): void {
   const text = compactCount(messages);
   const cx = frame.x + frame.width / 2;
-  const cy = frame.midY + g.yieldOffset;
-  const maxWidth = 2 * safeHalfWidth(g, g.yieldOffset - g.yieldHeight / 2, g.yieldOffset + g.yieldHeight / 2);
+  const offset = g.yieldOffset * g.squash;
+  const cy = frame.midY + offset;
+  const maxWidth = 2 * safeHalfWidth(g, offset - g.yieldHeight / 2, offset + g.yieldHeight / 2);
   ctx.save();
   let font = g.yieldFont;
   ctx.font = `700 ${font}px ui-sans-serif, system-ui, sans-serif`;
@@ -202,21 +204,28 @@ export const agentStatus: CellModule = {
       if (tint) fillHex(ctx, frame, tint.colour, strategic ? Math.max(tint.alpha, phiFade(2)) : tint.alpha);
     }
 
-    const g = cellGeometry(frame.width / 2);
+    const g = cellGeometry(frame.width / 2, frame.squash);
+    const cx = frame.x + frame.width / 2;
     // The strategic view is flat colour: no icons, like Civ's 2D map.
     if (!strategic && icon && ready) {
-      const x = frame.x + frame.width / 2 - g.iconSize / 2;
-      const y = frame.midY - g.iconSize / 2;
-      ctx.save();
-      if (!session.live) ctx.globalAlpha = FADES.history;
-      drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
-      ctx.restore();
+      frame.upright(cx, frame.midY, () => {
+        ctx.save();
+        if (!session.live) ctx.globalAlpha = FADES.history;
+        drawHexIcon(ctx, icon, cx - g.iconSize / 2, frame.midY + g.iconY - g.iconSize / 2, g.iconSize, scale, () => frameRequest?.());
+        ctx.restore();
+      });
     }
     if (activeLens === "status" && fogged(session)) fillHex(ctx, frame, FOG_COLOUR, FOG.veil);
-    if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
-    if (!strategic && isOn("yields") && session.messages > 0) drawYield(ctx, g, frame, session.messages);
+    frame.upright(cx, frame.midY, () => {
+      if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, cx, frame.midY, scale);
+      if (!strategic && isOn("yields") && session.messages > 0) drawYield(ctx, g, frame, session.messages);
+    });
     // Search: everything that does not match fades back under a white veil.
     if (searchQuery() && !sessionMatches(session)) fillHex(ctx, frame, SEARCH_VEIL, phiFade(1) + phiFade(3));
+  },
+  height(cell, apothem) {
+    const agent = find(cell);
+    return agent ? prismHeight(apothem, agent.session.messages, maxMessages) : 0;
   },
   describe(cell) {
     const agent = find(cell);

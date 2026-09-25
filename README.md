@@ -51,6 +51,10 @@ command and the whole conversation.
 - **Strategic view**: zoom out past φ⁻¹ and cells become flat colour blocks without icons, like
   Civ's 2D map; the **minimap** (bottom-left) shows everything and moves the camera on click or drag.
 - **Fog of war**: history sessions untouched for 30 days are veiled in grey (state lens).
+- **Tilted view** (`T` or the 倾斜 chip): tilt the camera like Civ's default view. The ground is
+  foreshortened to φ⁻¹ (about 52°), every session stands as a hex prism that rises with its message
+  count, and icons, badges and text stay upright. Zooming out towards the strategic view levels the
+  map again. The choice is remembered.
 
 ### Notes and search
 

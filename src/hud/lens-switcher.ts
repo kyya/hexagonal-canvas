@@ -2,6 +2,7 @@
 import { FOG } from "../cells/golden";
 import { AGENT_COLOURS, lens, LENSES, modelHue, setLens, subscribeLens, type LensId } from "../lens";
 import { currentLayout, subscribeLayout } from "../live";
+import { toggleTilt } from "../tilt";
 import { isOn, setToggle, subscribeToggles } from "../toggles";
 
 function isTyping(target: EventTarget | null): boolean {
@@ -87,8 +88,18 @@ export function startLensSwitcher(root: HTMLElement): void {
   yields.addEventListener("click", () => setToggle("yields", !isOn("yields")));
   tabs.append(yields);
 
+  // Civ's default camera: tilt the map so sessions stand as prisms (key T).
+  const tilt = document.createElement("button");
+  tilt.type = "button";
+  tilt.className = "hud-lens-toggle";
+  tilt.title = "倾斜视角，格子按消息数升高（T）";
+  tilt.textContent = "倾斜";
+  tilt.addEventListener("click", toggleTilt);
+  tabs.append(tilt);
+
   const render = () => {
     yields.setAttribute("aria-pressed", String(isOn("yields")));
+    tilt.setAttribute("aria-pressed", String(isOn("tilt")));
     const active = lens();
     for (const button of buttons) button.setAttribute("aria-selected", String(button.dataset.lens === active));
     legend.replaceChildren(...legendFor(active));
@@ -103,6 +114,11 @@ export function startLensSwitcher(root: HTMLElement): void {
     if (event.key.toLowerCase() === "y") {
       event.preventDefault();
       setToggle("yields", !isOn("yields"));
+      return;
+    }
+    if (event.key.toLowerCase() === "t") {
+      event.preventDefault();
+      toggleTilt();
       return;
     }
     const match = LENSES.find((item) => item.key === event.key);

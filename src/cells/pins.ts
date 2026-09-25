@@ -30,41 +30,46 @@ export const pinsModule: CellModule = {
     const pin = pinAt(cell.col, cell.row);
     if (!pin) return;
     const { ctx } = frame;
-    const g = cellGeometry(frame.width / 2);
+    const g = cellGeometry(frame.width / 2, frame.squash);
     const cx = frame.x + frame.width / 2;
     // A small map tack above the centre, leaving room for the note inside the text safe zone.
+    // Tilted, both stand upright where their anchors land on the foreshortened hex.
     const head = g.pinHeadRadius;
-    const headY = frame.midY + g.pinHeadY;
-    const tipY = frame.midY + g.pinTipY;
-    ctx.save();
-    if (!pinMatches(pin, searchQuery())) ctx.globalAlpha = phiFade(2);
-    ctx.fillStyle = PIN_COLOUR;
-    ctx.beginPath();
-    ctx.moveTo(cx, tipY);
-    ctx.lineTo(cx - head / PHI, headY + head / PHI);
-    ctx.lineTo(cx + head / PHI, headY + head / PHI);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx, headY, head, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(cx, headY, head / PHI ** 2, 0, Math.PI * 2);
-    ctx.fill();
-    // The note, truncated to the widest line the text safe zone allows at its height.
-    ctx.font = `600 ${g.noteFont}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(17, 24, 39, 0.78)";
-    const maxWidth = 2 * safeHalfWidth(g, g.noteOffset - g.noteFont * NOTE_LINE / 2, g.noteOffset + g.noteFont * NOTE_LINE / 2);
-    let text = pin.note;
-    if (ctx.measureText(text).width > maxWidth) {
-      while (text.length > 1 && ctx.measureText(`${text}…`).width > maxWidth) text = text.slice(0, -1);
-      text = `${text}…`;
-    }
-    ctx.fillText(text, cx, frame.midY + g.noteOffset);
-    ctx.restore();
+    const noteOffset = g.noteOffset * g.squash;
+    // The tack keeps its length; tilted, it is raised so its tip ends above the note.
+    const tipY = frame.midY + Math.min(g.pinTipY, noteOffset - (g.noteFont * NOTE_LINE) / 2);
+    const headY = tipY - (g.pinTipY - g.pinHeadY);
+    frame.upright(cx, frame.midY, () => {
+      ctx.save();
+      if (!pinMatches(pin, searchQuery())) ctx.globalAlpha = phiFade(2);
+      ctx.fillStyle = PIN_COLOUR;
+      ctx.beginPath();
+      ctx.moveTo(cx, tipY);
+      ctx.lineTo(cx - head / PHI, headY + head / PHI);
+      ctx.lineTo(cx + head / PHI, headY + head / PHI);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, headY, head, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(cx, headY, head / PHI ** 2, 0, Math.PI * 2);
+      ctx.fill();
+      // The note, truncated to the widest line the text safe zone allows at its height.
+      ctx.font = `600 ${g.noteFont}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(17, 24, 39, 0.78)";
+      const maxWidth = 2 * safeHalfWidth(g, noteOffset - g.noteFont * NOTE_LINE / 2, noteOffset + g.noteFont * NOTE_LINE / 2);
+      let text = pin.note;
+      if (ctx.measureText(text).width > maxWidth) {
+        while (text.length > 1 && ctx.measureText(`${text}…`).width > maxWidth) text = text.slice(0, -1);
+        text = `${text}…`;
+      }
+      ctx.fillText(text, cx, frame.midY + noteOffset);
+      ctx.restore();
+    });
   },
   describe(cell) {
     const pin = pinAt(cell.col, cell.row);

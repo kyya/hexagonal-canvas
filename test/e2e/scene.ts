@@ -154,15 +154,18 @@ async function buildScene(
     },
     camera: () => page.evaluate(() => (window as unknown as { __hexCanvas: { camera(): Camera } }).__hexCanvas.camera()),
     layout: () => page.evaluate(() => (window as unknown as { __hexCanvas: { layout(): Layout } }).__hexCanvas.layout()),
+    // Ground point → CSS pixels, through the page's own projection (which knows about the tilt).
     async worldToCss(x, y) {
-      const cam = await scene.camera();
-      return { cssX: (x - cam.x) * cam.zoom, cssY: (y - cam.y) * cam.zoom };
+      const point = await page.evaluate(([px, py]) => (window as unknown as { __hexCanvas: { project(x: number, y: number): { x: number; y: number } } }).__hexCanvas.project(px, py), [x, y]);
+      return { cssX: point.x, cssY: point.y };
     },
+    // A point on the cell's top face (raised when tilted); offsets are ground offsets from its centre.
     async cellPoint(id, dx = 0, dy = 0) {
       const cell = (await scene.layout()).sessions.find((session) => session.id === id);
       assert.ok(cell, `${id} has no cell`);
       const centre = hexCentre(cell.col, cell.row);
-      const { cssX, cssY } = await scene.worldToCss(centre.x + dx, centre.y + dy);
+      const lift = await page.evaluate(([col, row]) => (window as unknown as { __hexCanvas: { lift(col: number, row: number): number } }).__hexCanvas.lift(col, row), [cell.col, cell.row]);
+      const { cssX, cssY } = await scene.worldToCss(centre.x + dx, centre.y + dy - lift);
       return { x: Math.round(cssX * OUTPUT_SCALE), y: Math.round(cssY * OUTPUT_SCALE), cssX, cssY };
     },
     // The canvas is transparent over a white page and getImageData returns un-premultiplied colour:

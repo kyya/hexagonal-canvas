@@ -48,9 +48,10 @@ function computeCurves(frame: OverlayFrame): RelationCurve[] {
   const family = focusedFamily();
   if (family.size === 0) return [];
   const byId = new Map(layout.sessions.map((session) => [session.id, session]));
+  // Tilted, lines join the centres of the raised top faces.
   const centre = (col: number, row: number) => {
     const { x, y } = frame.origin(col, row);
-    return { x: x + frame.width / 2, y: y + frame.side };
+    return { x: x + frame.width / 2, y: y + frame.side - frame.lift(col, row) };
   };
   // Stop at the golden ring around the icon so the line never covers it.
   const clearance = (cellGeometry(frame.width / 2).iconSize / 2) * PHI ** 0.5;

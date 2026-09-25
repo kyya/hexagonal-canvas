@@ -19,7 +19,12 @@
 export const PHI = (1 + Math.sqrt(5)) / 2;
 
 export type CellGeometry = {
+  // Vertical foreshortening of the ground: 1 in the top-down view, φ⁻¹ fully tilted (see TILT).
+  squash: number;
   iconSize: number;
+  // Screen offset of the icon centre: 0 top-down. Tilted, the upright icon stands with its bottom
+  // edge where the yield pill sits, so the pill still rides the icon's bottom edge.
+  iconY: number;
   // Apothem of the text safe zone: the hex shrunk by apothem / φ³ on every side.
   safeApothem: number;
   badgeDistance: number;
@@ -39,20 +44,26 @@ export type CellGeometry = {
   noteFont: number;
 };
 
-export function cellGeometry(apothem: number): CellGeometry {
+// Positions are screen offsets from the cell centre. In the tilted view the hex is foreshortened by
+// `squash` while icons and text stay upright, so the badge is pushed out within the foreshortened
+// safe zone, and text boxes are sized with safeHalfWidth (which reads `squash` from the geometry).
+export function cellGeometry(apothem: number, squash = 1): CellGeometry {
   const iconRadius = apothem / PHI ** 2;
   const safeApothem = apothem - apothem / PHI ** 3;
   const badgeRadius = iconRadius / PHI ** 2;
   const badgeOutline = badgeRadius / PHI ** 3;
-  const badgeAngle = -Math.atan(PHI);
+  // The golden diagonal lies on the ground, so tilted it is foreshortened too.
+  const badgeAngle = -Math.atan(PHI * squash);
   const yieldFont = iconRadius / PHI;
   const pinHeadRadius = iconRadius / PHI ** 2;
   const pinHeadY = -iconRadius / PHI;
   return {
+    squash,
     iconSize: iconRadius * 2,
+    iconY: iconRadius * (squash - 1),
     safeApothem,
     // Push the badge out along its diagonal until its outline touches the safe zone.
-    badgeDistance: badgeDistanceWithin(safeApothem, badgeAngle, badgeRadius + badgeOutline),
+    badgeDistance: badgeDistanceWithin(safeApothem, badgeAngle, badgeRadius + badgeOutline, squash),
     badgeAngle,
     badgeRadius,
     badgeOutline,
@@ -72,21 +83,33 @@ export function cellGeometry(apothem: number): CellGeometry {
 // of apothem `a` when its projection on every normal is at most `a`.
 const EDGE_NORMALS = [0, 60, 120, 180, 240, 300].map((deg) => [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)] as const);
 
-// Largest distance along `angle` at which a disc of `radius` still fits inside the hex of apothem `a`.
-function badgeDistanceWithin(a: number, angle: number, radius: number): number {
-  const reach = Math.max(...EDGE_NORMALS.map(([nx, ny]) => Math.cos(angle) * nx + Math.sin(angle) * ny));
-  return (a - radius) / reach;
+// Largest distance along `angle` at which a disc of `radius` still fits inside the hex of apothem `a`
+// foreshortened vertically by `squash`. On screen an edge with normal (nx, ny) becomes the line
+// nx·x + (ny / squash)·y = a, so the disc must clear it by radius · |(nx, ny / squash)|.
+function badgeDistanceWithin(a: number, angle: number, radius: number, squash: number): number {
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  let best = Number.POSITIVE_INFINITY;
+  for (const [nx, ny] of EDGE_NORMALS) {
+    const mx = nx;
+    const my = ny / squash;
+    const reach = ux * mx + uy * my;
+    if (reach <= 0) continue;
+    best = Math.min(best, (a - radius * Math.hypot(mx, my)) / reach);
+  }
+  return best;
 }
 
-// How far a point (relative to the cell centre) is inside the hex of apothem `a` (negative = outside).
-export function insetOf(a: number, x: number, y: number): number {
-  return a - Math.max(...EDGE_NORMALS.map(([nx, ny]) => x * nx + y * ny));
+// How far a point (relative to the cell centre) is inside the hex of apothem `a` (negative = outside),
+// measured on the ground: with `squash` < 1, (x, y) is a screen offset in the tilted view.
+export function insetOf(a: number, x: number, y: number, squash = 1): number {
+  return a - Math.max(...EDGE_NORMALS.map(([nx, ny]) => x * nx + (y / squash) * ny));
 }
 
 // Half the widest text box, centred horizontally, that fits inside the safe zone while spanning
-// vertical offsets `top` … `bottom` (relative to the cell centre).
-export function safeHalfWidth(g: Pick<CellGeometry, "safeApothem">, top: number, bottom: number): number {
-  const farthest = Math.max(Math.abs(top), Math.abs(bottom));
+// vertical offsets `top` … `bottom` (screen offsets from the cell centre).
+export function safeHalfWidth(g: Pick<CellGeometry, "safeApothem"> & { squash?: number }, top: number, bottom: number): number {
+  const farthest = Math.max(Math.abs(top), Math.abs(bottom)) / (g.squash ?? 1);
   // Vertical edges bound |x| by the apothem; slanted edges by 0.5|x| + (√3/2)|y| ≤ apothem.
   return Math.max(0, Math.min(g.safeApothem, 2 * (g.safeApothem - (Math.sqrt(3) / 2) * farthest)));
 }
@@ -132,3 +155,32 @@ export const FOG = {
 
 // Strategic view (Civ's 2D map): below zoom φ⁻¹, cells become flat colour and icons are dropped.
 export const STRATEGIC_ZOOM = 1 / PHI;
+
+// Tilted view (Civ's default camera, key T): the ground is foreshortened to φ⁻¹ of its height
+// (cos θ = φ⁻¹, θ ≈ 51.8°), so a height h stands h · sin θ = h · φ^-½ tall on screen. Sessions rise
+// as hex prisms, icons and text stand upright on them. The camera tilts over φ⁻¹ s, and the tilt
+// eases out as you zoom towards the strategic view, which is always flat.
+export const TILT = {
+  squash: 1 / PHI,
+  glideMs: 1000 / PHI,
+} as const;
+
+// Foreshortening for a tilt `amount` (0 top-down … 1 tilted) at camera `zoom`.
+export function tiltSquash(amount: number, zoom: number): number {
+  const fade = Math.min(1, Math.max(0, (zoom - STRATEGIC_ZOOM) / (1 - STRATEGIC_ZOOM)));
+  return 1 - Math.min(1, Math.max(0, amount)) * fade * (1 - TILT.squash);
+}
+
+// On-screen height of a unit of prism height, for a foreshortening `squash`.
+export function tiltRise(squash: number): number {
+  return Math.sqrt(Math.max(0, 1 - squash * squash));
+}
+
+// Prism height of a session: a plinth of apothem / φ⁴, rising towards apothem / φ with its message
+// count (log scale, relative to the busiest session), so long conversations stand out like hills.
+export function prismHeight(apothem: number, messages: number, maxMessages: number): number {
+  const base = apothem / PHI ** 4;
+  const top = apothem / PHI;
+  const share = maxMessages > 0 ? Math.log1p(Math.max(0, messages)) / Math.log1p(maxMessages) : 0;
+  return base + (top - base) * Math.min(1, share);
+}

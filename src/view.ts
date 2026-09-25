@@ -9,6 +9,8 @@ export type View = {
   // Jump the camera so the world point is centred, without animation.
   centreOn(x: number, y: number): void;
   hexCentre(col: number, row: number): { x: number; y: number };
+  // The ground rectangle the screen shows (taller than the screen in world units when tilted).
+  viewBounds(): { x: number; y: number; width: number; height: number };
   requestRender(): void;
   // Called after every canvas render (camera moves, zoom, animation), e.g. to redraw the minimap.
   onRender(listener: () => void): void;

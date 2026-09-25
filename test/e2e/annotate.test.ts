@@ -51,7 +51,7 @@ describe("yields, search and map pins", () => {
     assert.equal((await yieldPixel(claude.id)).alpha, 0, "no yield before the toggle");
 
     await scene.page.keyboard.press("y");
-    const toggle = scene.page.locator(".hud-lens-toggle");
+    const toggle = scene.page.locator(".hud-lens-toggle", { hasText: "数字" });
     assert.equal(await toggle.getAttribute("aria-pressed"), "true");
     const shown = await eventually("the yield pill to appear", () => yieldPixel(claude.id), (pixel) => pixel.alpha > 200);
     const [r, g, b] = shown.rgb;

@@ -32,6 +32,12 @@ These are deliberate and locked by `src/cells/golden.test.ts`; change them only 
   (`src/cells/keyline.ts`, locked by `keyline.test.ts`). Draw icons through `drawHexIcon`.
 - **Keep the map calm.** Overlays that connect or annotate many cells (relation lines) draw only for
   the focused cell — hovered, or with its menu open (`src/focus.ts`) — never for everything at once.
+- **Tilted view keeps these rules.** Tilted (`src/tilt.ts`, `TILT` in `golden.ts`), the canvas is
+  foreshortened by `frame.squash`; tints fill the (raised) top face, and anything upright — icons,
+  badges, text — is drawn inside `frame.upright(...)` with its anchor foreshortened
+  (`offset * g.squash`) and its size not. Pass `frame.squash` to `cellGeometry`, and size text with
+  `safeHalfWidth`, which then keeps it inside the foreshortened safe zone. A new overlay that lies on
+  the ground goes in `underlay`; one that joins cells uses `frame.lift` to reach their raised tops.
 - **State is shown by tint and breath, not rings.** A live session tints its whole hex and breathes
   (idle still, busy shallow and quick, waiting deep and slow); only waiting adds the "!" badge.
 - Before and after any change to cell drawing, render the storybook and look at the crops.

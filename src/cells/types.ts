@@ -4,6 +4,9 @@ export type BoardCell = {
   row: number;
 };
 
+// In the tilted view the canvas is foreshortened vertically by `squash` (1 when top-down), and x, y,
+// midY describe the top face of the cell's prism. Tints fill that face as before; anything that
+// should stand upright (icons, badges, text) is drawn inside `upright`.
 export type CellFrame = {
   ctx: CanvasRenderingContext2D;
   x: number;
@@ -11,6 +14,9 @@ export type CellFrame = {
   width: number;
   midY: number;
   zoom: number;
+  squash: number;
+  // Draw with (cx, cy) as the anchor: offsets from it are screen offsets, not foreshortened.
+  upright(cx: number, cy: number, draw: () => void): void;
 };
 
 // Draws on top of every cell, in world coordinates. `origin` maps a hex to its top-left corner.
@@ -20,6 +26,10 @@ export type OverlayFrame = {
   side: number;
   zoom: number;
   origin(col: number, row: number): { x: number; y: number };
+  squash: number;
+  // How far the top of the cell's prism is raised, in (foreshortened) world units; 0 when flat.
+  lift(col: number, row: number): number;
+  upright(cx: number, cy: number, draw: () => void): void;
 };
 
 export type CellDetails = {
@@ -51,6 +61,10 @@ export type CellModule = {
   cells(): BoardCell[];
   draw(cell: BoardCell, frame: CellFrame): void;
   overlay?(frame: OverlayFrame): void;
+  // Drawn on the ground before any cell, so raised prisms stand in front of it (tilted view).
+  underlay?(frame: OverlayFrame): void;
+  // Prism height of a cell in the tilted view (world units); flat when absent.
+  height?(cell: BoardCell, apothem: number): number;
   // A plain click on the canvas, in world coordinates; return true if the module handled it.
   click?(x: number, y: number): boolean;
   // Short description for the hover tooltip.
