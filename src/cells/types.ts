@@ -10,6 +10,7 @@ export type CellFrame = {
   y: number;
   width: number;
   midY: number;
+  zoom: number;
 };
 
 // Draws on top of every cell, in world coordinates. `origin` maps a hex to its top-left corner.

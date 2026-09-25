@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { BREATH, breathAlpha, cellGeometry, FADES, PHI, phiFade } from "./golden.ts";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, PHI, phiFade, STRATEGIC_ZOOM } from "./golden.ts";
 
 // The canvas hex: side 64, so the apothem (inscribed radius, half the cell width) is 64·cos 30°.
 const APOTHEM = Math.cos(Math.PI / 6) * 64;
@@ -121,6 +121,14 @@ describe("state breathing", () => {
 
 describe("fades", () => {
   test("history = φ⁻²", () => close(FADES.history, phiFade(2), "history"));
+  test("fog of war veils at φ⁻¹ after 30 days", () => {
+    close(FOG.veil, phiFade(1), "fog veil");
+    assert.equal(FOG.afterDays, 30);
+  });
+});
+
+describe("strategic view", () => {
+  test("starts below zoom φ⁻¹", () => close(STRATEGIC_ZOOM, 1 / PHI, "strategic zoom"));
 });
 
 // Guard against bypassing ./golden: the drawing code must take every size, timing and fade from it.

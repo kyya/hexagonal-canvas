@@ -1,13 +1,16 @@
 import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { subscribeLayout, type Layout, type LiveSession } from "../live";
 import { armPop, popScale } from "./pop";
-import { BREATH, breathAlpha, cellGeometry, FADES, type CellGeometry } from "./golden";
+import { fogged, lens, lensTint, subscribeLens } from "../lens";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, phiFade, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
+import { projectHue } from "./palette";
 import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 
 // Every size, timing and opacity comes from ./golden (golden ratio, locked by golden.test.ts);
 // only colours live here. A live session's state is a soft tint filling its hex, breathing.
 const TINT = { idle: "#22c55e", busy: "#2563eb", waiting: "#f59e0b" } as const;
 const BADGE = "#f59e0b";
+const FOG_COLOUR = "#f3f4f6";
 const BASE_TITLE = document.title;
 
 type AgentCell = BoardCell & { session: LiveSession };
@@ -17,7 +20,10 @@ let cells: AgentCell[] = [];
 let byPosition = new Map<string, AgentCell>();
 let primed = false;
 
+let maxMessages = 0;
+
 function remember(layout: Layout): void {
+  maxMessages = Math.max(0, ...layout.sessions.map((session) => session.messages));
   const ids = new Set(layout.sessions.map((session) => session.id));
   for (const session of layout.sessions) {
     if (seen.has(session.id)) continue;
@@ -62,14 +68,27 @@ function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: num
   ctx.closePath();
 }
 
-// Drawn under the icon: the whole hex takes the state's colour at its breathing opacity.
-function drawStateTint(ctx: CanvasRenderingContext2D, frame: CellFrame, state: keyof typeof TINT, now: number): void {
+function fillHex(ctx: CanvasRenderingContext2D, frame: CellFrame, colour: string, alpha: number): void {
   ctx.save();
-  ctx.fillStyle = TINT[state];
-  ctx.globalAlpha = breathAlpha(BREATH[state], now);
+  ctx.fillStyle = colour;
+  ctx.globalAlpha = alpha;
   hexPath(ctx, frame.x, frame.y, frame.width, frame.midY - frame.y);
   ctx.fill();
   ctx.restore();
+}
+
+// Status lens background. Live cells take their state's colour: breathing up close, flat at φ⁻¹ in
+// the strategic view. History cells stay clear, except in the strategic view where they take a
+// pale wash of their project's colour so clusters still read.
+function drawStatusBackground(ctx: CanvasRenderingContext2D, frame: CellFrame, session: LiveSession, strategic: boolean, now: number): void {
+  const state = session.live ? (session.status ?? "idle") : null;
+  if (state) {
+    fillHex(ctx, frame, TINT[state], strategic ? phiFade(1) : breathAlpha(BREATH[state], now));
+    const { min, max } = BREATH[state];
+    if (max > min && !strategic) keepAnimating();
+  } else if (strategic) {
+    fillHex(ctx, frame, `hsl(${projectHue(session.cwd)}, 45%, 60%)`, phiFade(3));
+  }
 }
 
 // Waiting also gets a solid "!" badge (not breathing), so it reads without relying on colour.
@@ -115,6 +134,7 @@ export const agentStatus: CellModule = {
   kind: "agent-status",
   start(onChange) {
     frameRequest = onChange;
+    subscribeLens(() => onChange());
     subscribeLayout((layout) => {
       remember(layout);
       onChange();
@@ -126,27 +146,34 @@ export const agentStatus: CellModule = {
   draw(cell, frame) {
     const agent = find(cell);
     if (!agent) return;
-    const icon = agentHexIcon(agent.session.agent);
-    if (!icon) return;
-    const ready = iconReady(icon, () => frameRequest?.());
-    const scale = popScale(`live:${agent.session.id}`, ready);
-    if (!ready || scale === 0) return;
+    const { session } = agent;
     const { ctx } = frame;
-    const { status } = agent.session;
-    const g = cellGeometry(frame.width / 2);
-    const x = frame.x + frame.width / 2 - g.iconSize / 2;
-    const y = frame.midY - g.iconSize / 2;
-    const state = agent.session.live ? (status ?? "idle") : null;
-    if (state) {
-      drawStateTint(ctx, frame, state, performance.now());
-      const { min, max } = BREATH[state];
-      if (max > min) keepAnimating();
+    const strategic = frame.zoom < STRATEGIC_ZOOM;
+    const activeLens = lens();
+    const icon = agentHexIcon(session.agent);
+    const ready = icon ? iconReady(icon, () => frameRequest?.()) : false;
+    const scale = popScale(`live:${session.id}`, ready || strategic);
+    if (scale === 0) return;
+
+    if (activeLens === "status") {
+      drawStatusBackground(ctx, frame, session, strategic, performance.now());
+    } else {
+      const tint = lensTint(activeLens, session, maxMessages);
+      if (tint) fillHex(ctx, frame, tint.colour, strategic ? Math.max(tint.alpha, phiFade(2)) : tint.alpha);
     }
-    ctx.save();
-    if (!agent.session.live) ctx.globalAlpha = FADES.history;
-    drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
-    ctx.restore();
-    if (state === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
+
+    const g = cellGeometry(frame.width / 2);
+    // The strategic view is flat colour: no icons, like Civ's 2D map.
+    if (!strategic && icon && ready) {
+      const x = frame.x + frame.width / 2 - g.iconSize / 2;
+      const y = frame.midY - g.iconSize / 2;
+      ctx.save();
+      if (!session.live) ctx.globalAlpha = FADES.history;
+      drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
+      ctx.restore();
+    }
+    if (activeLens === "status" && fogged(session)) fillHex(ctx, frame, FOG_COLOUR, FOG.veil);
+    if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
   },
   describe(cell) {
     const agent = find(cell);

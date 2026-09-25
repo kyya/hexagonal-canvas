@@ -126,6 +126,7 @@ const TOOLTIP_DELAY_MS = 1000 / PHI ** 2;
 // Camera glides to a focused cell over φ⁻¹ s.
 const GLIDE_MS = 1000 / PHI;
 let tooltipTimer = 0;
+const renderListeners = new Set<() => void>();
 let glideFrame = 0;
 
 installView({
@@ -143,6 +144,7 @@ installView({
     return { x: x + hexRadius, y: y + sideLength };
   },
   requestRender: () => render(),
+  onRender: (listener) => renderListeners.add(listener),
 });
 
 // Introspection for the end-to-end tests: layout, camera and banner hit areas as the page sees them.
@@ -202,6 +204,7 @@ function focusHex(col: number, row: number, options: { openMenu?: boolean; zoom?
 
 function hideTooltip(): void {
   clearTimeout(tooltipTimer);
+  tooltipTimer = 0;
   tooltip.hidden = true;
 }
 
@@ -213,6 +216,7 @@ function scheduleTooltip(hex: Hex, clientX: number, clientY: number): void {
   const details = placed ? describePlaced(placed) : null;
   if (!details) return;
   tooltipTimer = window.setTimeout(() => {
+    tooltipTimer = 0;
     const title = document.createElement("div");
     title.className = "hex-tooltip-title";
     title.textContent = details.title;
@@ -457,7 +461,10 @@ function onPointerMove(event: PointerEvent): void {
   }
   const hoverWorld = screenToWorld(event.offsetX, event.offsetY);
   const next = pixelToHex(hoverWorld.x, hoverWorld.y);
-  if (!hover || hover.col !== next.col || hover.row !== next.row) scheduleTooltip(next, event.clientX, event.clientY);
+  // Re-arm on a new hex, and also when the tooltip was dismissed (a glide or click) while the
+  // pointer stayed on the same hex.
+  const moved = !hover || hover.col !== next.col || hover.row !== next.row;
+  if (moved || (tooltip.hidden && tooltipTimer === 0)) scheduleTooltip(next, event.clientX, event.clientY);
   hover = next;
   render();
 }
@@ -724,7 +731,7 @@ function render(): void {
   for (const placed of placedCells()) {
     if (!hexIntersectsView(placed.cell.col, placed.cell.row)) continue;
     const { x, y } = hexOrigin(placed.cell.col, placed.cell.row);
-    drawPlacedCell(placed, { ctx, x, y, width: hexRectangleWidth, midY: y + sideLength });
+    drawPlacedCell(placed, { ctx, x, y, width: hexRectangleWidth, midY: y + sideLength, zoom: camera.zoom });
   }
   drawOverlays({ ctx, width: hexRectangleWidth, side: sideLength, zoom: camera.zoom, origin: hexOrigin });
   pumpPops(render);
@@ -734,6 +741,7 @@ function render(): void {
     ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
     drawHexagon(x, y, true);
   }
+  for (const listener of renderListeners) listener();
 }
 
 function pixelToHex(x: number, y: number): Hex {

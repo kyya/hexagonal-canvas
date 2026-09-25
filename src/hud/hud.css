@@ -133,3 +133,95 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.hud-lens {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font: 12px/1.4 ui-sans-serif, system-ui, sans-serif;
+}
+
+.hud-lens-tabs {
+  display: flex;
+  padding: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+.hud-lens-tabs button {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.6);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud-lens-tabs button[aria-selected="true"] {
+  background: #111827;
+  color: #fff;
+}
+
+.hud-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: 340px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.hud-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-legend-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.hud-legend-gradient {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-legend-gradient i {
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.hud-minimap {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 3;
+  padding: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+.hud-minimap canvas {
+  display: block;
+  cursor: crosshair;
+}
+
+.hud-lens-tabs button:focus:not(:focus-visible),
+.hud-waiting-bar button:focus:not(:focus-visible) {
+  outline: none;
+}
