@@ -1,3 +1,6 @@
+// Explicit extension: the tests load this module in Node, which does not resolve bare paths.
+import { replayState, subscribeReplay } from "./replay.ts";
+
 export type LiveSession = {
   id: string;
   agent: string;
@@ -11,6 +14,8 @@ export type LiveSession = {
   model: string | null;
   messages: number;
   resume: string | null;
+  parentId: string | null;
+  relation: "fork" | "spawn" | null;
   col: number;
   row: number;
 };
@@ -155,19 +160,43 @@ export function place(sessions: ApiSession[]): Layout {
 // One EventSource for the page; every module that cares about sessions subscribes to the layout.
 const EMPTY: Layout = { sessions: [], labels: [] };
 const listeners = new Set<(layout: Layout) => void>();
+let raw: ApiSession[] = [];
 let latest: Layout = EMPTY;
 let source: EventSource | null = null;
 
+// During a replay, keep every cell where the full layout puts it but show only sessions that
+// existed at the replay time, all as history, with banner counts to match.
+function compute(): Layout {
+  const full = place(raw);
+  const replay = replayState();
+  if (!replay.active) return full;
+  const sessions = full.sessions
+    .filter((session) => time(session.createdAt) <= replay.time)
+    .map((session) => ({ ...session, live: false, status: null, waitingFor: null }));
+  const counts = new Map<string, number>();
+  for (const session of sessions) counts.set(session.cwd || "", (counts.get(session.cwd || "") ?? 0) + 1);
+  const labels = full.labels
+    .filter((label) => counts.has(label.cwd))
+    .map((label) => ({ ...label, total: counts.get(label.cwd) ?? 0, live: 0, waiting: 0 }));
+  return { sessions, labels };
+}
+
+function emit(): void {
+  latest = compute();
+  for (const listener of listeners) listener(latest);
+}
+
 function connect(): void {
+  subscribeReplay(emit);
   source = new EventSource("/api/sessions/stream");
   source.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data) as { sessions?: ApiSession[] };
-      latest = place(payload.sessions ?? []);
+      raw = payload.sessions ?? [];
     } catch {
-      latest = EMPTY;
+      raw = [];
     }
-    for (const listener of listeners) listener(latest);
+    emit();
   };
 }
 
@@ -182,4 +211,12 @@ export function subscribeLayout(listener: (layout: Layout) => void): () => void 
 
 export function currentLayout(): Layout {
   return latest;
+}
+
+// Every session's creation time, oldest first: the replay's "turns".
+export function sessionTimes(): number[] {
+  return raw
+    .map((session) => time(session.createdAt))
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
 }

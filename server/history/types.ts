@@ -13,6 +13,9 @@ export type HistorySession = {
   messages: number;
   resume: string | null;
   file: string;
+  // Where this session came from, as `agent:nativeId`: forked from, or spawned by, another session.
+  parentId?: string | null;
+  relation?: "fork" | "spawn" | null;
 };
 
 // What an adapter extracts from a single session file. The scanner fills in id, agent and file.

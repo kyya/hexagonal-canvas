@@ -220,9 +220,11 @@ function details(session: LiveSession): CellDetails {
   const state = session.status ? STATUS_TEXT[session.status] : session.live ? "运行中" : "";
   const waitingFor = session.status === "waiting" && session.waitingFor ? `：${session.waitingFor}` : "";
   const status = session.live ? `${state}${waitingFor}` : ago(session.updatedAt);
+  const parent = session.parentId ? cells.find((cell) => cell.session.id === session.parentId)?.session : null;
+  const origin = parent ? `${session.relation === "fork" ? "分叉自" : "派生自"}「${parent.title}」` : "";
   return {
     title: session.title,
-    subtitle: [session.agent, session.model, status, session.cwd].filter(Boolean).join(" · "),
+    subtitle: [session.agent, session.model, status, origin, session.cwd].filter(Boolean).join(" · "),
     command: session.resume,
   };
 }

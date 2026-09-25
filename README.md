@@ -60,6 +60,14 @@ command and the whole conversation.
 - **Map pins**: right-click an empty hex to drop a note; right-click the pin to edit or remove it.
   Pins live in this browser's storage and show up in the tooltip and search.
 
+### History
+
+- **Relations**: a line joins each session to the one it came from — solid with an arrow for a
+  spawned sub-agent (Codex `thread_spawn`, Grok sub-agents), dashed for a Codex fork. The menu and
+  tooltip say "分叉自 / 派生自" the parent.
+- **Replay** (`R` or 回放): the map rewinds to the first session and grows back one session at a
+  time, like Civ's end-game replay. Play, scrub, or × to return to live.
+
 Sessions are read-only from each agent's own files, following the adapters of
 [Wake](https://github.com/iAmCorey/Wake) (MIT):
 

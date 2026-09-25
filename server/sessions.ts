@@ -21,6 +21,8 @@ export type CanvasSession = {
   model: string | null;
   messages: number;
   resume: string | null;
+  parentId: string | null;
+  relation: "fork" | "spawn" | null;
 };
 
 // Parsing is cached per file, but listing still stats every file, so keep a short floor between scans.
@@ -59,6 +61,8 @@ function fromHistory(session: HistorySession, live: AgentSession | undefined): C
     model: session.model,
     messages: session.messages,
     resume: session.resume,
+    parentId: session.parentId ?? null,
+    relation: session.relation ?? null,
   };
 }
 
@@ -76,6 +80,8 @@ function fromLive(session: AgentSession): CanvasSession {
     model: null,
     messages: 0,
     resume: null,
+    parentId: null,
+    relation: null,
   };
 }
 

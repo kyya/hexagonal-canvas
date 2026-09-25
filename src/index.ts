@@ -9,6 +9,7 @@ import {
   placedCells,
   startCells,
 } from "./cells/board";
+import { relationCurves } from "./cells/relations";
 import { bannerRects } from "./cells/territory";
 import { startHud } from "./hud/hud";
 import { currentLayout } from "./live";
@@ -156,6 +157,7 @@ Object.assign(window, {
     camera: () => ({ ...camera }),
     layout: () => currentLayout(),
     banners: () => bannerRects(),
+    relations: () => relationCurves(),
     focus: (col: number, row: number) => focusHex(col, row),
   },
 });
