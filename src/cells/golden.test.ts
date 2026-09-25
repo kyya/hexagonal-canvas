@@ -270,24 +270,17 @@ describe("sticker icons", () => {
 });
 
 describe("coin stacks", () => {
-  test("hex coins: apothem / φ, thickness and wobble apothem / φ⁶", () => {
-    close(STACK.plate, 1 / PHI, "coin apothem");
-    close(STACK.thickness, PHI ** -6, "thickness");
-    close(STACK.wobble, PHI ** -6, "wobble");
-  });
-  test("a pile shows 1 + log_φ(count) coins, at most seven", () => {
+  test("tiles are the cell itself, apothem / φ⁵ thick", () => close(STACK.thickness, PHI ** -5, "thickness"));
+  test("a stack shows 1 + log_φ(count) tiles, at most seven", () => {
     assert.deepEqual([0, 1, 2, 3, 5, 8, 13, 18, 100, 5000].map(coinCount), [0, 1, 2, 3, 4, 5, 6, 7, 7, 7]);
   });
-  test("the tallest pile, centred, stays inside the hex", () => {
-    const pile = STACK.maxCoins * STACK.thickness * APOTHEM;
-    // A pointy-top coin reaches its vertex, apothem / cos 30°, above its centre.
-    const reach = pile / 2 + (STACK.plate * APOTHEM) / Math.cos(Math.PI / 6) + APOTHEM * STACK.wobble;
-    assert.ok(reach < 64, `pile reaches ${reach} from the centre, the hex vertex is 64`);
+  test("the tallest stack rises less than half a row", () => {
+    const rise = STACK.maxCoins * STACK.thickness * APOTHEM;
+    assert.ok(rise < (64 * 1.5) / 2, `stack rises ${rise}`);
   });
-  test("the count on the top coin stays inside the text safe zone", () => {
+  test("the count on the top tile stays inside the text safe zone", () => {
     const g = cellGeometry(APOTHEM);
-    const top = -(STACK.maxCoins * STACK.thickness * APOTHEM) / 2;
-    const width = 2 * safeHalfWidth(g, top - g.yieldFont / 2, top + g.yieldFont / 2);
+    const width = 2 * safeHalfWidth(g, -g.yieldFont / 2, g.yieldFont / 2);
     assert.ok(width >= 4 * 0.62 * g.yieldFont, `room for a four-digit count: ${width}`);
   });
 });
