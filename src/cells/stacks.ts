@@ -9,10 +9,13 @@ import { ago, compactCount, details } from "./agent-status";
 import { cellGeometry, coinCount, FOG, phiFade, prismHeight, STACK, STRATEGIC_ZOOM } from "./golden";
 import type { BoardCell, CellFrame, CellModule } from "./types";
 
-// Silver coins: a pale face, rims alternating two greys so each coin reads on its own.
+// Silver hex coins: a pale face; the lit (lower-left) and shaded (lower-right) rims alternate two
+// tones from coin to coin so each one reads on its own.
 const FACE = "#f3f4f6";
-const RIM = "#d1d5db";
-const RIM_ALT = "#c4c9d1";
+const RIMS = [
+  ["#e5e7eb", "#d1d5db"],
+  ["#d9dde3", "#c4c9d1"],
+] as const;
 const EDGE = "rgba(0, 0, 0, 0.22)";
 const COUNT = "rgba(75, 85, 99, 0.95)";
 const FLAT = "#d1d5db";
@@ -48,22 +51,26 @@ function hexPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, apothem:
   ctx.closePath();
 }
 
-// One coin lying on (cx, base), `thick` tall: its rim (the front half of the edge), then its face.
-// In the tilted view the canvas is foreshortened, so the discs become ellipses by themselves.
-function drawCoin(ctx: CanvasRenderingContext2D, cx: number, base: number, radius: number, thick: number, rim: string): void {
-  ctx.fillStyle = rim;
-  ctx.beginPath();
-  ctx.moveTo(cx - radius, base - thick);
-  ctx.lineTo(cx - radius, base);
-  ctx.arc(cx, base, radius, Math.PI, 0, true);
-  ctx.lineTo(cx + radius, base - thick);
-  ctx.arc(cx, base - thick, radius, 0, Math.PI, false);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+// One hexagonal coin lying on (cx, base), `thick` tall, pointy-top like the grid: its two front
+// faces (the rim that shows), then its face. `plate` is the coin's apothem. In the tilted view the
+// canvas is foreshortened, so the coins lie flat by themselves.
+function drawCoin(ctx: CanvasRenderingContext2D, cx: number, base: number, plate: number, thick: number, rim: string, shade: string): void {
+  const r = plate / Math.cos(Math.PI / 6);
+  const side = (ax: number, ay: number, bx: number, by: number, colour: string) => {
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay - thick);
+    ctx.lineTo(bx, by - thick);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(ax, ay);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  };
+  side(cx - plate, base + r / 2, cx, base + r, rim);
+  side(cx, base + r, cx + plate, base + r / 2, shade);
   ctx.fillStyle = FACE;
-  ctx.beginPath();
-  ctx.arc(cx, base - thick, radius, 0, Math.PI * 2);
+  hexPath(ctx, cx, base - thick, plate);
   ctx.fill();
   ctx.stroke();
 }
@@ -85,7 +92,7 @@ function drawStack(stack: Stack, frame: CellFrame): void {
     ctx.restore();
     return;
   }
-  const radius = apothem * STACK.radius;
+  const plate = apothem * STACK.plate;
   // Coin thickness is a screen height: in the tilted view the canvas is foreshortened, so undo it.
   const thick = (apothem * STACK.thickness) / frame.squash;
   const coins = coinCount(count);
@@ -97,7 +104,8 @@ function drawStack(stack: Stack, frame: CellFrame): void {
   for (let k = 0; k < coins; k++) {
     // A fixed, hand-stacked wobble (golden-angle steps), the same on every frame.
     x = cx + Math.sin(k * 2.39996) * apothem * STACK.wobble;
-    drawCoin(ctx, x, floor - k * thick, radius, thick, k % 2 === 0 ? RIM : RIM_ALT);
+    const [rim, shade] = RIMS[k % 2] ?? RIMS[0];
+    drawCoin(ctx, x, floor - k * thick, plate, thick, rim, shade);
   }
   // The count, upright on the top coin, inside the text safe zone.
   const top = floor - coins * thick;

@@ -270,8 +270,8 @@ describe("sticker icons", () => {
 });
 
 describe("coin stacks", () => {
-  test("coins: radius apothem / φ, thickness and wobble apothem / φ⁶", () => {
-    close(STACK.radius, 1 / PHI, "radius");
+  test("hex coins: apothem / φ, thickness and wobble apothem / φ⁶", () => {
+    close(STACK.plate, 1 / PHI, "coin apothem");
     close(STACK.thickness, PHI ** -6, "thickness");
     close(STACK.wobble, PHI ** -6, "wobble");
   });
@@ -280,7 +280,8 @@ describe("coin stacks", () => {
   });
   test("the tallest pile, centred, stays inside the hex", () => {
     const pile = STACK.maxCoins * STACK.thickness * APOTHEM;
-    const reach = pile / 2 + STACK.radius * APOTHEM + APOTHEM * STACK.wobble;
+    // A pointy-top coin reaches its vertex, apothem / cos 30°, above its centre.
+    const reach = pile / 2 + (STACK.plate * APOTHEM) / Math.cos(Math.PI / 6) + APOTHEM * STACK.wobble;
     assert.ok(reach < 64, `pile reaches ${reach} from the centre, the hex vertex is 64`);
   });
   test("the count on the top coin stays inside the text safe zone", () => {

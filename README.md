@@ -57,7 +57,7 @@ project path or open it in VS Code.
   message count, with a legend for each. The choice is remembered.
 - **Strategic view**: zoom out past φ⁻¹ and cells become flat colour blocks without icons, like
   Civ's 2D map; the **minimap** (bottom-left) shows everything and moves the camera on click or drag.
-- **Coin stacks**: history sessions untouched for 30 days leave the map and pile up like coins on
+- **Coin stacks**: history sessions untouched for 30 days leave the map and pile up like hexagonal coins on
   one hex at the front of their project's cluster. The pile grows with the count (one more coin
   each time it grows by φ) and shows the number on top; hover for a summary, right-click to list
   the sessions and open any of them. Search still finds them, and the replay unpiles them.
