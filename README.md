@@ -62,9 +62,9 @@ command and the whole conversation.
 
 ### History
 
-- **Relations**: a line joins each session to the one it came from — solid with an arrow for a
-  spawned sub-agent (Codex `thread_spawn`, Grok sub-agents), dashed for a Codex fork. The menu and
-  tooltip say "分叉自 / 派生自" the parent.
+- **Relations**: hover a session (or open its menu) to see its family — a straight line to the
+  session it came from, solid with an arrow for a spawned sub-agent (Codex `thread_spawn`, Grok
+  sub-agents), dashed for a Codex fork. The menu and tooltip say "分叉自 / 派生自" the parent.
 - **Replay** (`R` or 回放): the map rewinds to the first session and grows back one session at a
   time, like Civ's end-game replay. Play, scrub, or × to return to live.
 

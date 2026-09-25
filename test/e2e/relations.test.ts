@@ -53,33 +53,52 @@ describe("relations and replay", () => {
     assert.equal(byId.get(codex.parent.id)?.parentId, null);
   });
 
-  test("⑦ relations: lines join child and parent, solid for spawn and dashed for fork", async () => {
-    const drawn = await eventually("three relation curves", curves, (list) => list.length === 3);
-    const kinds = Object.fromEntries(drawn.map((curve) => [curve.childId, curve.kind]));
-    assert.deepEqual(kinds, { [codex.spawn.id]: "spawn", [codex.fork.id]: "fork", [grok.child.id]: "spawn" });
+  test("⑦ relations: no lines until you focus a session; then only its family, straight", async () => {
+    await scene.page.mouse.move(2, 2);
+    assert.deepEqual(await curves(), [], "the map starts without relation lines");
 
-    // The curve is really painted: sample its midpoint (quadratic Bézier at t = ½).
+    // Hover the spawned child: its whole family (parent, spawn, fork) is drawn, nothing else.
+    const spawn = await scene.cellPoint(codex.spawn.id);
+    await scene.page.mouse.move(spawn.cssX, spawn.cssY);
+    const drawn = await eventually("the codex family", curves, (list) => list.length === 2);
+    assert.deepEqual(
+      Object.fromEntries(drawn.map((curve) => [curve.childId, curve.kind])),
+      { [codex.spawn.id]: "spawn", [codex.fork.id]: "fork" },
+    );
     for (const curve of drawn) {
-      const mid = {
-        x: 0.25 * curve.from.x + 0.5 * curve.control.x + 0.25 * curve.to.x,
-        y: 0.25 * curve.from.y + 0.5 * curve.control.y + 0.25 * curve.to.y,
-      };
-      // Probe a small neighbourhood: the dash gaps of a fork may fall exactly on the midpoint.
+      // Straight: the midpoint of from→to is on the line.
+      assert.ok(Math.abs(curve.control.x - (curve.from.x + curve.to.x) / 2) < 1e-6 && Math.abs(curve.control.y - (curve.from.y + curve.to.y) / 2) < 1e-6);
       let best = 0;
       for (const [dx, dy] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2], [4, 0], [-4, 0], [0, 4], [0, -4]]) {
-        const css = await scene.worldToCss(mid.x + (dx ?? 0), mid.y + (dy ?? 0));
+        const css = await scene.worldToCss(curve.control.x + (dx ?? 0), curve.control.y + (dy ?? 0));
         const { rgb } = await scene.pixelAtCss(css.cssX, css.cssY);
         best = Math.max(best, 255 - Math.min(...rgb));
       }
       assert.ok(best > 60, `${curve.kind} line to ${curve.childId} should be visible, darkness ${best}`);
-    }
-    // The line stops short of the icons it joins.
-    for (const curve of drawn) {
       const start = await scene.worldToCss(curve.from.x, curve.from.y);
       const parentCentre = await scene.cellPoint(curve.parentId);
       assert.ok(Math.hypot(start.cssX - parentCentre.cssX, start.cssY - parentCentre.cssY) > 20, "line starts outside the parent icon");
     }
     await scene.shot("f7-relations", await clusterClip());
+
+    // Another family replaces it.
+    const grokChild = await scene.cellPoint(grok.child.id);
+    await scene.page.mouse.move(grokChild.cssX, grokChild.cssY);
+    const grokLines = await eventually("the grok family", curves, (list) => list.length === 1);
+    assert.equal(grokLines[0]?.parentId, grok.parent.id);
+
+    // A session without relations shows none; leaving the canvas clears them.
+    const lone = await scene.cellPoint(scene.story("history", "gemini").id);
+    await scene.page.mouse.move(lone.cssX, lone.cssY);
+    await eventually("no lines on an unrelated session", curves, (list) => list.length === 0);
+
+    // With a menu open, its family stays drawn wherever the pointer goes.
+    const fork = await scene.cellPoint(codex.fork.id);
+    await scene.page.mouse.click(fork.cssX, fork.cssY, { button: "right" });
+    await scene.page.mouse.move(2, 2);
+    await eventually("the open menu's family", curves, (list) => list.length === 2);
+    await scene.page.keyboard.press("Escape");
+    await eventually("lines to clear with the menu", curves, (list) => list.length === 0);
   });
 
   test("⑦ relations: the menu says where a session came from", async () => {

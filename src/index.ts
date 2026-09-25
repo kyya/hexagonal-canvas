@@ -13,13 +13,14 @@ import { relationCurves } from "./cells/relations";
 import { bannerRects } from "./cells/territory";
 import { startHud } from "./hud/hud";
 import { currentLayout } from "./live";
+import { setHovered, setOpened } from "./focus";
 import { installView } from "./view";
 import { cellGeometry, PHI } from "./cells/golden";
 import type { CellDetails, CellForm, CellMenu } from "./cells/types";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
 import { beginFrame, popScale, pumpPops } from "./cells/pop";
-import { drawHexIcon, ICON_CYCLE, iconReady, iconsEqual, type HexIcon } from "./icons";
+import { drawHexIcon, ICON_CYCLE, iconReady, iconsEqual, measuredInks, type HexIcon } from "./icons";
 
 const canvasEl = document.querySelector<HTMLCanvasElement>("#app");
 if (!canvasEl) {
@@ -114,7 +115,10 @@ canvas.addEventListener("pointerdown", onPointerDown);
 canvas.addEventListener("pointermove", onPointerMove);
 canvas.addEventListener("pointerup", onPointerUp);
 canvas.addEventListener("pointercancel", onPointerCancel);
-canvas.addEventListener("pointerleave", () => hideTooltip());
+canvas.addEventListener("pointerleave", () => {
+  hideTooltip();
+  setHovered(null);
+});
 menu.addEventListener("pointerdown", (event) => event.stopPropagation());
 document.addEventListener("pointerdown", onDocumentPointerDown);
 window.addEventListener("keydown", onKeyDown);
@@ -158,6 +162,7 @@ Object.assign(window, {
     layout: () => currentLayout(),
     banners: () => bannerRects(),
     relations: () => relationCurves(),
+    inks: () => measuredInks(),
     focus: (col: number, row: number) => focusHex(col, row),
   },
 });
@@ -274,6 +279,7 @@ function openMenu(hex: Hex, x: number, y: number): void {
   };
   const placed = placedCellAt(hex.col, hex.row);
   if (placed) {
+    setOpened(hex);
     openPlacedMenu(placed, api);
   } else if (!openEmptyMenu(hex.col, hex.row, api)) {
     closeMenu();
@@ -293,6 +299,7 @@ function openMenu(hex: Hex, x: number, y: number): void {
 }
 
 function closeMenu(): void {
+  setOpened(null);
   menu.hidden = true;
   menuTranscript.hidden = true;
   menuDetails.hidden = true;
@@ -511,6 +518,7 @@ function onPointerMove(event: PointerEvent): void {
   const moved = !hover || hover.col !== next.col || hover.row !== next.row;
   if (moved || (tooltip.hidden && tooltipTimer === 0)) scheduleTooltip(next, event.clientX, event.clientY);
   hover = next;
+  setHovered(pointer ? null : next);
   render();
 }
 
