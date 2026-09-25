@@ -53,7 +53,7 @@ command and the whole conversation.
 - **Fog of war**: history sessions untouched for 30 days are veiled in grey (state lens).
 - **Tilted view** (`T` or the 倾斜 chip): tilt the camera like Civ's default view. The ground is
   foreshortened to φ⁻¹ (about 52°), every session stands as a hex prism that rises with its message
-  count, icons lie on the tops and tilt with them, and badges and text stay upright to read. Zooming out towards the strategic view levels the
+  count, icons and the waiting badge lie on the tops and tilt with them, and text stays upright to read. Zooming out towards the strategic view levels the
   map again. The choice is remembered.
 
 ### Notes and search

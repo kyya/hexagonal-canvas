@@ -215,8 +215,9 @@ export const agentStatus: CellModule = {
       ctx.restore();
     }
     if (activeLens === "status" && fogged(session)) fillHex(ctx, frame, FOG_COLOUR, FOG.veil);
+    // The badge lies on the top face with the icon; the yield number stands upright to stay readable.
+    if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, cx, frame.midY, scale);
     frame.upright(cx, frame.midY, () => {
-      if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, cx, frame.midY, scale);
       if (!strategic && isOn("yields") && session.messages > 0) drawYield(ctx, g, frame, session.messages);
     });
     // Search: everything that does not match fades back under a white veil.

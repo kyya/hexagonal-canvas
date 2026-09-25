@@ -1,5 +1,5 @@
 // The tilted camera (Civ's default view): the ground is foreshortened, sessions stand as hex prisms
-// that rise with their message count, icons lie on (and tilt with) their tops while badges and text
+// that rise with their message count, icons and badges lie on (and tilt with) their tops while text
 // stay upright, and picking hits the prism in
 // front. With E2E_SHOTS set, each test saves its verification screenshot.
 import assert from "node:assert/strict";
@@ -98,14 +98,23 @@ describe("tilted view", () => {
     await scene.shot("f11-tilt-prisms", clip);
   });
 
-  test("tints fill the raised top, the badge stands upright, and the icon tilts with the face", async () => {
+  test("tints, the badge and the icon lie on the raised top and tilt with it", async () => {
     const waiting = scene.story("waiting");
     await eventually("the waiting tint on the raised top", () => scene.tint(waiting.id), (value) => value === "amber");
-    const { squash } = await tilt();
-    const g = cellGeometry(HEX_RADIUS, squash);
-    const top = await scene.cellPoint(waiting.id);
-    const badge = await scene.pixelAtCss(top.cssX + Math.cos(g.badgeAngle) * g.badgeDistance + g.badgeRadius * 0.6, top.cssY + Math.sin(g.badgeAngle) * g.badgeDistance);
+    // The badge sits at its ground offset on the face (scene.badge projects it), squashed with it.
+    const badge = await scene.badge(waiting.id);
     assert.equal(badge.alpha, 255, "the badge is solid");
+    const g = cellGeometry(HEX_RADIUS);
+    const bx = Math.cos(g.badgeAngle) * g.badgeDistance;
+    const by = Math.sin(g.badgeAngle) * g.badgeDistance;
+    // Lying on the face, the disc keeps its width but is foreshortened to φ⁻¹ of its height: a point
+    // 0.85 r right of its centre is badge, 0.85 r above it (on screen) is not.
+    const spot = await scene.cellPoint(waiting.id, bx, by);
+    const r = g.badgeRadius * 0.85;
+    const isBadge = (rgb: number[]) => (rgb[0] ?? 0) > 200 && (rgb[2] ?? 255) < 40;
+    assert.ok(isBadge((await scene.pixelAtCss(spot.cssX + r, spot.cssY)).rgb), "the badge keeps its width");
+    const over = await scene.pixelAtCss(spot.cssX, spot.cssY - r);
+    assert.ok(!isBadge(over.rgb), `the badge is foreshortened with the face, got ${over.rgb} above it`);
     assert.ok(badge.rgb[0] > 200 && badge.rgb[2] < 80, `the badge is amber, got ${badge.rgb}`);
 
     // The icon lies on the top face: the Claude glyph (as tall as it is wide top-down) is

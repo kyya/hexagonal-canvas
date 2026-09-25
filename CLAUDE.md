@@ -33,10 +33,11 @@ These are deliberate and locked by `src/cells/golden.test.ts`; change them only 
 - **Keep the map calm.** Overlays that connect or annotate many cells (relation lines) draw only for
   the focused cell — hovered, or with its menu open (`src/focus.ts`) — never for everything at once.
 - **Tilted view keeps these rules.** Tilted (`src/tilt.ts`, `TILT` in `golden.ts`), the canvas is
-  foreshortened by `frame.squash`; tints and icons lie on the (raised) top face and tilt with it,
-  and anything carrying text — badges, numbers, notes, banners — is drawn inside
-  `frame.upright(...)` with its anchor foreshortened (`offset * g.squash`) and its size not. Pass `frame.squash` to `cellGeometry`, and size text with
-  `safeHalfWidth`, which then keeps it inside the foreshortened safe zone. A new overlay that lies on
+  foreshortened by `frame.squash`; tints, icons and the waiting badge lie on the (raised) top face
+  and tilt with it, with no perspective. Text — numbers, notes, banners — is drawn inside
+  `frame.upright(...)` with its anchor foreshortened (`offset * g.squash`) and its size not. Pass
+  `frame.squash` to `cellGeometry`, and size text with `safeHalfWidth`, which then keeps it inside
+  the foreshortened safe zone. A new overlay that lies on
   the ground goes in `underlay`; one that joins cells uses `frame.lift` to reach their raised tops.
 - **State is shown by tint and breath, not rings.** A live session tints its whole hex and breathes
   (idle still, busy shallow and quick, waiting deep and slow); only waiting adds the "!" badge.

@@ -41,16 +41,16 @@ export type CellGeometry = {
   noteFont: number;
 };
 
-// Positions are screen offsets from the cell centre. In the tilted view the hex is foreshortened by
-// `squash`: icons lie on it and are foreshortened with it, while text stays upright, so the badge is pushed out within the foreshortened
-// safe zone, and text boxes are sized with safeHalfWidth (which reads `squash` from the geometry).
+// Positions are offsets from the cell centre on the ground. In the tilted view the hex is
+// foreshortened by `squash`: the icon and the waiting badge lie on it and tilt with it, so their
+// ground geometry holds as is. Upright text (yield numbers, pin notes) is anchored at a
+// foreshortened offset and sized with safeHalfWidth, which reads `squash` from the geometry.
 export function cellGeometry(apothem: number, squash = 1): CellGeometry {
   const iconRadius = apothem / PHI ** 2;
   const safeApothem = apothem - apothem / PHI ** 3;
   const badgeRadius = iconRadius / PHI ** 2;
   const badgeOutline = badgeRadius / PHI ** 3;
-  // The golden diagonal lies on the ground, so tilted it is foreshortened too.
-  const badgeAngle = -Math.atan(PHI * squash);
+  const badgeAngle = -Math.atan(PHI);
   const yieldFont = iconRadius / PHI;
   const pinHeadRadius = iconRadius / PHI ** 2;
   const pinHeadY = -iconRadius / PHI;
@@ -59,7 +59,7 @@ export function cellGeometry(apothem: number, squash = 1): CellGeometry {
     iconSize: iconRadius * 2,
     safeApothem,
     // Push the badge out along its diagonal until its outline touches the safe zone.
-    badgeDistance: badgeDistanceWithin(safeApothem, badgeAngle, badgeRadius + badgeOutline, squash),
+    badgeDistance: badgeDistanceWithin(safeApothem, badgeAngle, badgeRadius + badgeOutline),
     badgeAngle,
     badgeRadius,
     badgeOutline,
@@ -79,21 +79,10 @@ export function cellGeometry(apothem: number, squash = 1): CellGeometry {
 // of apothem `a` when its projection on every normal is at most `a`.
 const EDGE_NORMALS = [0, 60, 120, 180, 240, 300].map((deg) => [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)] as const);
 
-// Largest distance along `angle` at which a disc of `radius` still fits inside the hex of apothem `a`
-// foreshortened vertically by `squash`. On screen an edge with normal (nx, ny) becomes the line
-// nx·x + (ny / squash)·y = a, so the disc must clear it by radius · |(nx, ny / squash)|.
-function badgeDistanceWithin(a: number, angle: number, radius: number, squash: number): number {
-  const ux = Math.cos(angle);
-  const uy = Math.sin(angle);
-  let best = Number.POSITIVE_INFINITY;
-  for (const [nx, ny] of EDGE_NORMALS) {
-    const mx = nx;
-    const my = ny / squash;
-    const reach = ux * mx + uy * my;
-    if (reach <= 0) continue;
-    best = Math.min(best, (a - radius * Math.hypot(mx, my)) / reach);
-  }
-  return best;
+// Largest distance along `angle` at which a disc of `radius` still fits inside the hex of apothem `a`.
+function badgeDistanceWithin(a: number, angle: number, radius: number): number {
+  const reach = Math.max(...EDGE_NORMALS.map(([nx, ny]) => Math.cos(angle) * nx + Math.sin(angle) * ny));
+  return (a - radius) / reach;
 }
 
 // How far a point (relative to the cell centre) is inside the hex of apothem `a` (negative = outside),

@@ -223,37 +223,11 @@ describe("tilted view", () => {
   const margin = APOTHEM - t.safeApothem;
   const inZone = (x: number, y: number) => insetOf(APOTHEM, x, y, TILT.squash) >= margin - 1e-6;
 
-  test("geometry matches the top-down one except for the badge placement", () => {
+  test("geometry matches the top-down one: the icon and badge lie on the face", () => {
     const flat = cellGeometry(APOTHEM);
-    for (const key of ["iconSize", "safeApothem", "badgeRadius", "badgeGlyph", "yieldFont", "yieldHeight", "noteFont"] as const) close(t[key], flat[key], key);
+    for (const key of ["iconSize", "safeApothem", "badgeDistance", "badgeAngle", "badgeRadius", "badgeOutline", "badgeGlyph", "yieldFont", "yieldHeight", "noteFont"] as const) close(t[key], flat[key], key);
     // The icon lies on the face: its foreshortened bottom edge is where the upright pill is centred.
     close((t.iconSize / 2) * TILT.squash, t.yieldOffset * TILT.squash, "pill rides the tilted icon's bottom edge");
-  });
-
-  test("the waiting badge disc stays inside the foreshortened safe zone", () => {
-    const cx = Math.cos(t.badgeAngle) * t.badgeDistance;
-    const cy = Math.sin(t.badgeAngle) * t.badgeDistance;
-    const r = t.badgeRadius + t.badgeOutline;
-    for (let i = 0; i < 72; i++) {
-      const a = (i / 72) * Math.PI * 2;
-      assert.ok(inZone(cx + Math.cos(a) * r, cy + Math.sin(a) * r), `badge edge at ${i * 5}° crowds an edge`);
-    }
-    // …and is pushed out as far as it goes: slightly further would cross.
-    const far = cellGeometry(APOTHEM, TILT.squash).badgeDistance * 1.02;
-    const edge = [...Array(72).keys()].some((i) => {
-      const a = (i / 72) * Math.PI * 2;
-      return !inZone(Math.cos(t.badgeAngle) * far + Math.cos(a) * r, Math.sin(t.badgeAngle) * far + Math.sin(a) * r);
-    });
-    assert.ok(edge, "badge should touch the safe zone");
-  });
-
-  test("the badge follows the foreshortened golden diagonal, outside the foreshortened icon", () => {
-    close(Math.tan(-t.badgeAngle), PHI * TILT.squash, "tan(tilted badge angle)");
-    const r = t.iconSize / 2;
-    const x = Math.cos(t.badgeAngle) * t.badgeDistance;
-    const y = Math.sin(t.badgeAngle) * t.badgeDistance;
-    const ellipse = (x / r) ** 2 + (y / (r * TILT.squash)) ** 2;
-    assert.ok(ellipse > 1, `badge centre should lie outside the icon's foreshortened disc, got ${ellipse}`);
   });
 
   test("the yield pill, upright at its foreshortened anchor, fits two characters at full size (longer counts shrink)", () => {
