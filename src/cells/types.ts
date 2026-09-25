@@ -16,6 +16,8 @@ export type CellFrame = {
 export type OverlayFrame = {
   ctx: CanvasRenderingContext2D;
   width: number;
+  side: number;
+  zoom: number;
   origin(col: number, row: number): { x: number; y: number };
 };
 
@@ -38,5 +40,9 @@ export type CellModule = {
   cells(): BoardCell[];
   draw(cell: BoardCell, frame: CellFrame): void;
   overlay?(frame: OverlayFrame): void;
+  // A plain click on the canvas, in world coordinates; return true if the module handled it.
+  click?(x: number, y: number): boolean;
+  // Short description for the hover tooltip.
+  describe?(cell: BoardCell): CellDetails | null;
   menu(cell: BoardCell, menu: CellMenu): void;
 };

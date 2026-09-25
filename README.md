@@ -36,6 +36,14 @@ breathes: still pale green when idle, shallow quick blue breaths while working, 
 breaths when it is waiting on you. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
 command and the whole conversation.
 
+### Finding your way
+
+- **Next waiting**: when sessions wait on you, a button in the bottom-right corner counts them. Press
+  `N` or click it to glide to the next one with its menu open; the caret lists them all.
+- **Territory**: each project's cluster has a border in the project's colour and a banner showing
+  its name, session count, running (green) and waiting (amber) counts. Click a banner to fly there.
+- **Tooltip**: rest the pointer on a cell for its title, agent, model and state.
+
 Sessions are read-only from each agent's own files, following the adapters of
 [Wake](https://github.com/iAmCorey/Wake) (MIT):
 

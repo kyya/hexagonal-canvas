@@ -1,5 +1,18 @@
-import { drawOverlays, drawPlacedCell, openPlacedMenu, placedCellAt, placedCells, startCells } from "./cells/board";
-import { cellGeometry } from "./cells/golden";
+import {
+  clickAt,
+  describePlaced,
+  drawOverlays,
+  drawPlacedCell,
+  openPlacedMenu,
+  placedCellAt,
+  placedCells,
+  startCells,
+} from "./cells/board";
+import { bannerRects } from "./cells/territory";
+import { startHud } from "./hud/hud";
+import { currentLayout } from "./live";
+import { installView } from "./view";
+import { cellGeometry, PHI } from "./cells/golden";
 import type { CellDetails } from "./cells/types";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
@@ -97,12 +110,50 @@ canvas.addEventListener("pointerdown", onPointerDown);
 canvas.addEventListener("pointermove", onPointerMove);
 canvas.addEventListener("pointerup", onPointerUp);
 canvas.addEventListener("pointercancel", onPointerCancel);
+canvas.addEventListener("pointerleave", () => hideTooltip());
 menu.addEventListener("pointerdown", (event) => event.stopPropagation());
 document.addEventListener("pointerdown", onDocumentPointerDown);
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", onKeyUp);
 window.addEventListener("blur", releasePanKeys);
 window.addEventListener("resize", onResize);
+
+const tooltipNode = document.querySelector<HTMLElement>("#hex-tooltip");
+if (!tooltipNode) throw new Error("Missing hex tooltip");
+const tooltip: HTMLElement = tooltipNode;
+// Hover must rest this long on a cell before its tooltip shows (φ⁻² s).
+const TOOLTIP_DELAY_MS = 1000 / PHI ** 2;
+// Camera glides to a focused cell over φ⁻¹ s.
+const GLIDE_MS = 1000 / PHI;
+let tooltipTimer = 0;
+let glideFrame = 0;
+
+installView({
+  camera: () => ({ ...camera }),
+  focus: focusHex,
+  centreOn(x, y) {
+    camera.x = x - window.innerWidth / 2 / camera.zoom;
+    camera.y = y - window.innerHeight / 2 / camera.zoom;
+    saveCamera();
+    syncChunks();
+    render();
+  },
+  hexCentre(col, row) {
+    const { x, y } = hexOrigin(col, row);
+    return { x: x + hexRadius, y: y + sideLength };
+  },
+  requestRender: () => render(),
+});
+
+// Introspection for the end-to-end tests: layout, camera and banner hit areas as the page sees them.
+Object.assign(window, {
+  __hexCanvas: {
+    camera: () => ({ ...camera }),
+    layout: () => currentLayout(),
+    banners: () => bannerRects(),
+    focus: (col: number, row: number) => focusHex(col, row),
+  },
+});
 
 loadHexStates();
 let framed = loadCamera();
@@ -113,6 +164,71 @@ startCells(() => {
   if (!framed) framed = frameCells();
   render();
 });
+startHud();
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+function focusHex(col: number, row: number, options: { openMenu?: boolean; zoom?: number } = {}): void {
+  cancelAnimationFrame(glideFrame);
+  closeMenu();
+  hideTooltip();
+  const { x, y } = hexOrigin(col, row);
+  const target = { x: x + hexRadius, y: y + sideLength };
+  const fromZoom = camera.zoom;
+  const toZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, options.zoom ?? Math.max(camera.zoom, 1)));
+  const from = { x: camera.x + window.innerWidth / 2 / camera.zoom, y: camera.y + window.innerHeight / 2 / camera.zoom };
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / GLIDE_MS);
+    const k = easeInOut(t);
+    camera.zoom = fromZoom + (toZoom - fromZoom) * k;
+    const centreX = from.x + (target.x - from.x) * k;
+    const centreY = from.y + (target.y - from.y) * k;
+    camera.x = centreX - window.innerWidth / 2 / camera.zoom;
+    camera.y = centreY - window.innerHeight / 2 / camera.zoom;
+    saveCamera();
+    syncChunks();
+    render();
+    if (t < 1) {
+      glideFrame = requestAnimationFrame(step);
+    } else if (options.openMenu && placedCellAt(col, row)) {
+      openMenu({ col, row }, window.innerWidth / 2, window.innerHeight / 2);
+    }
+  };
+  glideFrame = requestAnimationFrame(step);
+}
+
+function hideTooltip(): void {
+  clearTimeout(tooltipTimer);
+  tooltip.hidden = true;
+}
+
+function scheduleTooltip(hex: Hex, clientX: number, clientY: number): void {
+  clearTimeout(tooltipTimer);
+  tooltip.hidden = true;
+  if (pointer || !menu.hidden) return;
+  const placed = placedCellAt(hex.col, hex.row);
+  const details = placed ? describePlaced(placed) : null;
+  if (!details) return;
+  tooltipTimer = window.setTimeout(() => {
+    const title = document.createElement("div");
+    title.className = "hex-tooltip-title";
+    title.textContent = details.title;
+    const subtitle = document.createElement("div");
+    subtitle.className = "hex-tooltip-subtitle";
+    subtitle.textContent = details.subtitle;
+    tooltip.replaceChildren(title, subtitle);
+    tooltip.hidden = false;
+    const offset = 14;
+    const rect = tooltip.getBoundingClientRect();
+    const left = Math.min(clientX + offset, window.innerWidth - rect.width - 8);
+    const top = Math.min(clientY + offset, window.innerHeight - rect.height - 8);
+    tooltip.style.left = `${Math.max(8, left)}px`;
+    tooltip.style.top = `${Math.max(8, top)}px`;
+  }, TOOLTIP_DELAY_MS);
+}
 
 function fitCanvas(): void {
   const width = window.innerWidth;
@@ -142,6 +258,7 @@ function onContextMenu(event: MouseEvent): void {
 }
 
 function openMenu(hex: Hex, x: number, y: number): void {
+  hideTooltip();
   menuTranscript.hidden = true;
   menuDetails.hidden = true;
   const placed = placedCellAt(hex.col, hex.row);
@@ -301,6 +418,7 @@ function onKeyDown(event: KeyboardEvent): void {
 }
 
 function onPointerDown(event: PointerEvent): void {
+  hideTooltip();
   if (event.button !== 0) return;
   const downWorld = screenToWorld(event.offsetX, event.offsetY);
   const hex = pixelToHex(downWorld.x, downWorld.y);
@@ -338,7 +456,9 @@ function onPointerMove(event: PointerEvent): void {
     }
   }
   const hoverWorld = screenToWorld(event.offsetX, event.offsetY);
-  hover = pixelToHex(hoverWorld.x, hoverWorld.y);
+  const next = pixelToHex(hoverWorld.x, hoverWorld.y);
+  if (!hover || hover.col !== next.col || hover.row !== next.row) scheduleTooltip(next, event.clientX, event.clientY);
+  hover = next;
   render();
 }
 
@@ -355,6 +475,10 @@ function onPointerUp(event: PointerEvent): void {
     return;
   }
   const moved = dx * dx + dy * dy > CLICK_SLOP * CLICK_SLOP;
+  if (mode === "pan" && !moved) {
+    const world = screenToWorld(event.offsetX, event.offsetY);
+    if (clickAt(world.x, world.y)) return;
+  }
   if (mode === "select") {
     if (!moved) {
       const id = hexId(col, row);
@@ -602,7 +726,7 @@ function render(): void {
     const { x, y } = hexOrigin(placed.cell.col, placed.cell.row);
     drawPlacedCell(placed, { ctx, x, y, width: hexRectangleWidth, midY: y + sideLength });
   }
-  drawOverlays({ ctx, width: hexRectangleWidth, origin: hexOrigin });
+  drawOverlays({ ctx, width: hexRectangleWidth, side: sideLength, zoom: camera.zoom, origin: hexOrigin });
   pumpPops(render);
 
   if (hover) {

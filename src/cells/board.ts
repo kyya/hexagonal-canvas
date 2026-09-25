@@ -1,7 +1,9 @@
 import { agentStatus } from "./agent-status";
-import type { BoardCell, CellFrame, CellMenu, CellModule, OverlayFrame } from "./types";
+import { territory } from "./territory";
+import type { BoardCell, CellDetails, CellFrame, CellMenu, CellModule, OverlayFrame } from "./types";
 
-const modules: CellModule[] = [agentStatus];
+// Draw order: territory borders and banners overlay the agent cells.
+const modules: CellModule[] = [agentStatus, territory];
 
 export type PlacedCell = {
   module: CellModule;
@@ -30,6 +32,14 @@ export function drawPlacedCell(placed: PlacedCell, frame: CellFrame): void {
 
 export function drawOverlays(frame: OverlayFrame): void {
   for (const module of modules) module.overlay?.(frame);
+}
+
+export function clickAt(x: number, y: number): boolean {
+  return modules.some((module) => module.click?.(x, y) ?? false);
+}
+
+export function describePlaced(placed: PlacedCell): CellDetails | null {
+  return placed.module.describe?.(placed.cell) ?? null;
 }
 
 export function openPlacedMenu(placed: PlacedCell, menu: CellMenu): void {
