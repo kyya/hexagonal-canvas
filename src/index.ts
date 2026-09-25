@@ -777,6 +777,7 @@ function generateChunk(col: number, row: number): Chunk {
 // bottom edge still draw.
 function viewWorld(): { left: number; right: number; top: number; bottom: number } {
   const halfHeight = window.innerHeight / 2 / (camera.zoom * squash);
+  // The tallest prism is one apothem (prismHeight).
   const reach = squash < 1 ? hexRadius * (rise / squash) : 0;
   return {
     left: camera.x,

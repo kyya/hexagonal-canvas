@@ -200,20 +200,22 @@ describe("tilted view", () => {
     close(tiltRise(1), 0, "no rise top-down");
   });
 
-  test("prisms rise from apothem / φ⁴ to apothem / φ with the message count (log scale)", () => {
-    close(prismHeight(APOTHEM, 0, 500), APOTHEM / PHI ** 4, "plinth");
-    close(prismHeight(APOTHEM, 500, 500), APOTHEM / PHI, "busiest session");
-    close(prismHeight(APOTHEM, 3, 0), APOTHEM / PHI ** 4, "no messages anywhere");
+  const BASE = APOTHEM / PHI ** 3;
+  const TOP = APOTHEM;
+  test("prisms rise from apothem / φ³ to the apothem with the message count (log scale)", () => {
+    close(prismHeight(APOTHEM, 0, 500), BASE, "plinth");
+    close(prismHeight(APOTHEM, 500, 500), TOP, "busiest session");
+    close(prismHeight(APOTHEM, 3, 0), BASE, "no messages anywhere");
     const low = prismHeight(APOTHEM, 10, 500);
     const high = prismHeight(APOTHEM, 100, 500);
-    assert.ok(low < high && high < APOTHEM / PHI, "more messages stand taller");
+    assert.ok(low < high && high < TOP, "more messages stand taller");
     // Log scale: a tenth of the busiest session still gets well over half the rise.
-    assert.ok(high - APOTHEM / PHI ** 4 > (APOTHEM / PHI - APOTHEM / PHI ** 4) / 2);
+    assert.ok(high - BASE > (TOP - BASE) / 2);
   });
 
   test("the tallest prism never reaches the row behind it", () => {
     const rowStep = 64 * 1.5;
-    assert.ok((APOTHEM / PHI) * tiltRise(TILT.squash) < rowStep * TILT.squash, "a raised top stays below the next row's centre");
+    assert.ok(TOP * tiltRise(TILT.squash) < rowStep * TILT.squash, "a raised top stays below the next row's centre");
   });
 
   // Text safe zone, tilted: upright text must lie inside the foreshortened safe zone.

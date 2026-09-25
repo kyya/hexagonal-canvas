@@ -172,11 +172,11 @@ export function tiltRise(squash: number): number {
   return Math.sqrt(Math.max(0, 1 - squash * squash));
 }
 
-// Prism height of a session: a plinth of apothem / φ⁴, rising towards apothem / φ with its message
+// Prism height of a session: a plinth of apothem / φ³, rising towards the apothem with its message
 // count (log scale, relative to the busiest session), so long conversations stand out like hills.
 export function prismHeight(apothem: number, messages: number, maxMessages: number): number {
-  const base = apothem / PHI ** 4;
-  const top = apothem / PHI;
+  const base = apothem / PHI ** 3;
+  const top = apothem;
   const share = maxMessages > 0 ? Math.log1p(Math.max(0, messages)) / Math.log1p(maxMessages) : 0;
   return base + (top - base) * Math.min(1, share);
 }
