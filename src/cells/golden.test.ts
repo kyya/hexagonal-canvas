@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { BREATH, breathAlpha, cellGeometry, coinCount, STACK, FADES, FOG, insetOf, PHI, phiFade, prismHeight, safeHalfWidth, STICKER, STRATEGIC_ZOOM, TILT, tiltRise, tiltSquash } from "./golden.ts";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, insetOf, PHI, phiFade, prismHeight, safeHalfWidth, STICKER, STRATEGIC_ZOOM, TILT, tiltRise, tiltSquash } from "./golden.ts";
 
 // The canvas hex: side 64, so the apothem (inscribed radius, half the cell width) is 64·cos 30°.
 const APOTHEM = Math.cos(Math.PI / 6) * 64;
@@ -266,22 +266,6 @@ describe("sticker icons", () => {
     const g = cellGeometry(APOTHEM);
     const edge = (g.iconSize / 2) * (1 + STICKER.border);
     assert.ok(edge < g.badgeDistance, "the badge centre lies beyond the sticker's edge");
-  });
-});
-
-describe("coin stacks", () => {
-  test("tiles are the cell itself, apothem / φ⁵ thick", () => close(STACK.thickness, PHI ** -5, "thickness"));
-  test("a stack shows 1 + log_φ(count) tiles, at most seven", () => {
-    assert.deepEqual([0, 1, 2, 3, 5, 8, 13, 18, 100, 5000].map(coinCount), [0, 1, 2, 3, 4, 5, 6, 7, 7, 7]);
-  });
-  test("the tallest stack rises less than half a row", () => {
-    const rise = STACK.maxCoins * STACK.thickness * APOTHEM;
-    assert.ok(rise < (64 * 1.5) / 2, `stack rises ${rise}`);
-  });
-  test("the count on the top tile stays inside the text safe zone", () => {
-    const g = cellGeometry(APOTHEM);
-    const width = 2 * safeHalfWidth(g, -g.yieldFont / 2, g.yieldFont / 2);
-    assert.ok(width >= 4 * 0.62 * g.yieldFont, `room for a four-digit count: ${width}`);
   });
 });
 

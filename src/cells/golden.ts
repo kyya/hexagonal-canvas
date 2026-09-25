@@ -191,18 +191,3 @@ export const BREATH_FRAME_MS = 1000 / PHI ** 6;
 export function stillBreath(breath: Breath): number {
   return (breath.min + breath.max) / 2;
 }
-
-// Coin stacks: each project's stale sessions (untouched for FOG.afterDays) pile up on one hex as a
-// neat stack of hex tiles the size of the cell, each apothem / φ⁵ thick, exactly on top of one
-// another: the bottom tile is the cell itself and the stack rises from it. It shows
-// 1 + log_φ(count) tiles, one more each time the count grows by φ: one session is one tile, 18
-// sessions (≈ φ⁶) are seven tiles, the most a stack shows.
-export const STACK = {
-  thickness: phiFade(5),
-  maxCoins: 7,
-} as const;
-
-export function coinCount(sessions: number): number {
-  if (sessions <= 0) return 0;
-  return Math.min(STACK.maxCoins, 1 + Math.round(Math.log(sessions) / Math.log(PHI)));
-}

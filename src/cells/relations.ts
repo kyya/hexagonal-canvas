@@ -9,7 +9,7 @@ import type { CellModule, OverlayFrame } from "./types";
 
 const LINE = "71, 85, 105";
 
-let layout: Layout = { sessions: [], labels: [], stacks: [] };
+let layout: Layout = { sessions: [], labels: [] };
 
 export type RelationCurve = { childId: string; parentId: string; kind: "fork" | "spawn"; from: Point; control: Point; to: Point };
 type Point = { x: number; y: number };

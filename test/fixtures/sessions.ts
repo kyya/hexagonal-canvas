@@ -304,9 +304,9 @@ export function registerLiveAs(home: string, story: Story, pid: number, state: L
 }
 
 // A Claude session last touched `daysAgo` days ago (fog of war covers old ones).
-export function writeAged(home: string, n: number, daysAgo: number, prompt: string, cwd = PROJECT): Story {
+export function writeAged(home: string, n: number, daysAgo: number, prompt: string): Story {
   const id = uuid(n);
-  claudeLike(home, ".claude", id, Date.now() - daysAgo * DAY, prompt, "claude-opus-5-5", cwd);
+  claudeLike(home, ".claude", id, Date.now() - daysAgo * DAY, prompt, "claude-opus-5-5");
   return { id: `claude:${id}`, agent: "claude", state: "history", label: prompt };
 }
 

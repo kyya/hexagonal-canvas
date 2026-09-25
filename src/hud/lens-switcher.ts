@@ -40,7 +40,7 @@ function legendFor(id: LensId): HTMLElement[] {
         swatch("#22c55e", "空闲"),
         swatch("#2563eb", "工作中"),
         swatch("#f59e0b", "等你处理"),
-        swatch("#d1d5db", `硬币堆：${FOG.afterDays} 天没动的会话`),
+        swatch("#d1d5db", `迷雾：${FOG.afterDays} 天未动`),
       ];
     case "recency":
       return [gradient("rgba(124, 58, 237, 0.62)", "rgba(124, 58, 237, 0.08)", "今天", "4 周前")];
