@@ -1,6 +1,6 @@
 ---
 name: cell-storybook
-description: Render storybook-style contact sheets of single hex cells on the Hexagonal Canvas — every visual state (history/faded, live idle, busy spinner, waiting halo) with animation frames, plus one faded cell per agent icon. Use this whenever the user wants to see, screenshot, compare or review how a hex/格子 looks, asks for 单个格子截图 / 各种状态截图 / storybook / 组件图 / 视觉回归, or after any change to cell drawing (src/cells/*, src/icons.ts, status colours, icon sizes, animations) so the result can be checked before and after — even if they only say "拍出来我看看" or "截个图看看效果".
+description: Render storybook-style contact sheets of single hex cells on the Hexagonal Canvas — every visual state (history/faded, live idle, busy spinner, waiting ring) with animation frames, plus one faded cell per agent icon. Use this whenever the user wants to see, screenshot, compare or review how a hex/格子 looks, asks for 单个格子截图 / 各种状态截图 / storybook / 组件图 / 视觉回归, or after any change to cell drawing (src/cells/*, src/icons.ts, status colours, icon sizes, animations) so the result can be checked before and after — even if they only say "拍出来我看看" or "截个图看看效果".
 ---
 
 # Cell storybook

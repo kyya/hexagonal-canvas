@@ -160,7 +160,9 @@ function sheetHtml(crops: Crop[], options: Options): string {
     h2{font-size:15px;margin:18px 0 8px}small{color:#999;font-weight:400;font-size:12px}
     .row,.grid{display:flex;gap:12px;flex-wrap:wrap}
     figure{margin:0;background:#fff;border:1px solid #e5e5e5;border-radius:10px;overflow:hidden}
-    img{display:block;width:200px}figcaption{font-size:11px;color:#888;text-align:center;padding:4px 6px}
+    img{display:block;width:200px;margin:0 auto;
+      /* The crop is the hex's bounding box; its corners belong to neighbouring cells. */
+      clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}figcaption{font-size:11px;color:#888;text-align:center;padding:4px 6px}
   </style></head><body>
     <h1>Hex cell storybook</h1>
     <p class="meta">zoom ${options.zoom}× · ${options.frames} 帧 / ${options.interval}ms · ${new Date().toISOString()}</p>
