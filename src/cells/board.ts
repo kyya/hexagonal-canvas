@@ -1,5 +1,5 @@
 import { agentStatus } from "./agent-status";
-import type { BoardCell, CellFrame, CellMenu, CellModule } from "./types";
+import type { BoardCell, CellFrame, CellMenu, CellModule, OverlayFrame } from "./types";
 
 const modules: CellModule[] = [agentStatus];
 
@@ -26,6 +26,10 @@ export function placedCellAt(col: number, row: number): PlacedCell | null {
 
 export function drawPlacedCell(placed: PlacedCell, frame: CellFrame): void {
   placed.module.draw(placed.cell, frame);
+}
+
+export function drawOverlays(frame: OverlayFrame): void {
+  for (const module of modules) module.overlay?.(frame);
 }
 
 export function openPlacedMenu(placed: PlacedCell, menu: CellMenu): void {

@@ -14,4 +14,42 @@ pnpm install
 pnpm dev
 pnpm build
 pnpm preview
+pnpm test
+pnpm test:e2e
 ```
+
+`pnpm test:e2e` runs the whole app against a throwaway fixture `$HOME` (one session per agent, plus
+live sessions backed by stand-in processes) and drives it in Chromium: session discovery, the state
+tints and badge read back from canvas pixels, the right-click menu and transcript, and live updates
+(a status change, a process exiting, a new session file, a new reply). It needs Playwright with
+Chromium (`npm i -g playwright && npx playwright install chromium`) and never touches your real
+`$HOME` or a running `pnpm dev`.
+
+`pnpm test` locks the golden-ratio design of a cell (`src/cells/golden.ts`): proportions, timings and
+breathing all derive from φ, and the test fails if one drifts or if drawing code hard-codes its own sizes.
+
+## Agent sessions
+
+`pnpm dev` also starts a small local server (`server/`) that finds every coding-agent session on
+this machine and puts one on each hex, grouped by project. A running session tints its hex and
+breathes: still pale green when idle, shallow quick blue breaths while working, deep slow amber
+breaths when it is waiting on you. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
+command and the whole conversation.
+
+Sessions are read-only from each agent's own files, following the adapters of
+[Wake](https://github.com/iAmCorey/Wake) (MIT):
+
+| Agent | Data source |
+|---|---|
+| Claude Code | `~/.claude/projects/*/*.jsonl` (`CLAUDE_CONFIG_DIR`) |
+| Codex CLI | `~/.codex/sessions/**`, `archived_sessions`, `state_5.sqlite` (`CODEX_HOME`) |
+| Qoder CLI | `~/.qoder/projects/*/*.jsonl` (`QODER_CONFIG_DIR`) |
+| CodeBuddy / WorkBuddy | `~/.codebuddy/projects`, `~/.workbuddy/projects` |
+| Gemini CLI | `~/.gemini/tmp/*/chats/session-*.jsonl` |
+| Pi / Oh My Pi | `~/.pi/agent/sessions`, `~/.omp/agent/sessions` |
+| Grok Build | `~/.grok/sessions/*/*/updates.jsonl` |
+| Kimi Code | `~/.kimi-code/sessions/*/*/agents/main/wire.jsonl` |
+| Kiro CLI | `~/.kiro/sessions/cli/*.jsonl` |
+| DeepSeek Harness | `~/.dsh/sessions/*/*/session.jsonl[.zstd]` |
+
+Files are only re-parsed when their size or mtime changes. The server binds to `127.0.0.1` only.

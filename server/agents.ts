@@ -1,15 +1,18 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
 export type AgentSession = {
   id: string;
-  agent: "claude" | "codex" | "grok" | "kimi" | "qoder";
+  agent: string;
   title: string;
   cwd: string;
   pid: number | null;
   since: string | null;
+  // Only agents that publish it (Claude Code's session registry) set these.
+  status?: "busy" | "idle" | "waiting";
+  waitingFor?: string;
 };
 
 type ProcessRow = {
@@ -53,7 +56,22 @@ function listProcesses(): ProcessRow[] {
   }
 }
 
+// A process's cwd hardly ever changes, and lsof is the slowest call in a scan: remember it briefly.
+const CWD_TTL_MS = 30_000;
+const cwdCache = new Map<number, { cwd: string; at: number }>();
+
 function cwdOf(pid: number): string {
+  const cached = cwdCache.get(pid);
+  if (cached && Date.now() - cached.at < CWD_TTL_MS) return cached.cwd;
+  const cwd = lookupCwd(pid);
+  cwdCache.set(pid, { cwd, at: Date.now() });
+  for (const [key, entry] of cwdCache) {
+    if (Date.now() - entry.at >= CWD_TTL_MS) cwdCache.delete(key);
+  }
+  return cwd;
+}
+
+function lookupCwd(pid: number): string {
   try {
     const output = execFileSync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], {
       encoding: "utf8",
@@ -145,19 +163,70 @@ function codexSessions(processes: ProcessRow[]): AgentSession[] {
   return sessions;
 }
 
+// True when the process itself is `name` (or a node/bun script called `name`), not merely a
+// command line that mentions it, e.g. `sh -c "ln -sf …/bin/claude …"`.
+function runs(command: string, name: string): boolean {
+  const [exe = "", script = ""] = command.trim().split(/\s+/);
+  const base = (path: string) => path.split("/").at(-1) ?? "";
+  if (base(exe) === name) return true;
+  return /^(node|bun|deno)$/.test(base(exe)) && base(script) === name;
+}
+
 function isCodexCli(command: string): boolean {
   if (!/(^|\/|\s)codex(\s|$)/.test(command)) return false;
   return !/app-server|code-mode-host|proxy|launch\.mjs|ChatGPT/.test(command);
+}
+
+// Claude Code registers each running session as ~/.claude/sessions/<pid>.json, which carries the
+// session id, so a live process can be matched with its history file.
+function claudeSessions(): AgentSession[] {
+  const dir = join(process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), ".claude"), "sessions");
+  let names: string[] = [];
+  try {
+    names = readdirSync(dir).filter((name) => /^\d+\.json$/.test(name));
+  } catch {
+    return [];
+  }
+  const sessions: AgentSession[] = [];
+  for (const name of names) {
+    const record = readJson(join(dir, name));
+    if (!record || typeof record !== "object") continue;
+    const row = record as {
+      pid?: unknown;
+      sessionId?: unknown;
+      cwd?: unknown;
+      startedAt?: unknown;
+      name?: unknown;
+      status?: unknown;
+      waitingFor?: unknown;
+    };
+    const pid = typeof row.pid === "number" ? row.pid : 0;
+    const sessionId = text(row.sessionId);
+    if (!sessionId || !pidAlive(pid)) continue;
+    const cwd = text(row.cwd);
+    sessions.push({
+      id: `claude:${sessionId}`,
+      agent: "claude",
+      title: text(row.name) || basename(cwd) || "Claude",
+      cwd,
+      pid,
+      since: typeof row.startedAt === "number" ? new Date(row.startedAt).toISOString() : null,
+      ...(row.status === "busy" || row.status === "idle" || row.status === "waiting" ? { status: row.status } : {}),
+      ...(row.status === "waiting" && text(row.waitingFor) ? { waitingFor: text(row.waitingFor) } : {}),
+    });
+  }
+  return sessions;
 }
 
 function commandSessions(
   agent: AgentSession["agent"],
   processes: ProcessRow[],
   match: (command: string) => boolean,
+  known = new Set<number>(),
 ): AgentSession[] {
   const sessions: AgentSession[] = [];
   for (const process of processes) {
-    if (!match(process.command) || !pidAlive(process.pid)) continue;
+    if (known.has(process.pid) || !match(process.command) || !pidAlive(process.pid)) continue;
     const cwd = cwdOf(process.pid);
     sessions.push({
       id: `${agent}:${process.pid}`,
@@ -173,14 +242,19 @@ function commandSessions(
 
 export function collectSessions(): AgentSession[] {
   const processes = listProcesses();
+  const registered = claudeSessions();
+  const registeredPids = new Set(registered.flatMap((session) => (session.pid ? [session.pid] : [])));
   const sessions = [
     ...grokSessions(),
     ...codexSessions(processes),
-    ...commandSessions("claude", processes, (command) => {
-      if (command.includes("Claude.app")) return false;
-      return /(^|\/|\s)claude(\s|$)/.test(command);
-    }),
-    ...commandSessions("kimi", processes, (command) => /(^|\/|\s)kimi(\s|$)/.test(command)),
+    ...registered,
+    ...commandSessions(
+      "claude",
+      processes,
+      (command) => !command.includes("Claude.app") && runs(command, "claude"),
+      registeredPids,
+    ),
+    ...commandSessions("kimi", processes, (command) => runs(command, "kimi")),
     ...commandSessions("qoder", processes, (command) => {
       if (command.includes("Helper") || command.includes("crashpad")) return false;
       return /(^|\/)qoder(\s|$)/.test(command);

@@ -1,15 +1,28 @@
 import claudeUrl from "@lobehub/icons-static-svg/icons/claude-color.svg?url";
+import codebuddyUrl from "@lobehub/icons-static-svg/icons/codebuddy-color.svg?url";
 import deepseekUrl from "@lobehub/icons-static-svg/icons/deepseek-color.svg?url";
 import geminiUrl from "@lobehub/icons-static-svg/icons/gemini-color.svg?url";
-import kimiUrl from "@lobehub/icons-static-svg/icons/kimi-color.svg?url";
+import kimiUrl from "@lobehub/icons-static-svg/icons/kimi.svg?url";
+import kiroUrl from "@lobehub/icons-static-svg/icons/kiro-color.svg?url";
 import openaiUrl from "@lobehub/icons-static-svg/icons/openai.svg?url";
+import piUrl from "@lobehub/icons-static-svg/icons/pi.svg?url";
 import qoderUrl from "@lobehub/icons-static-svg/icons/qoder-color.svg?url";
 import xaiUrl from "@lobehub/icons-static-svg/icons/xai.svg?url";
 import twemoji from "twemoji";
 
 const TWEMOJI_SVG = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/";
 
-export type LobeSlug = "openai" | "claude" | "xai" | "gemini" | "deepseek" | "kimi" | "qoder";
+export type LobeSlug =
+  | "openai"
+  | "claude"
+  | "xai"
+  | "gemini"
+  | "deepseek"
+  | "kimi"
+  | "qoder"
+  | "codebuddy"
+  | "kiro"
+  | "pi";
 
 export type HexIcon =
   | { kind: "lobe"; slug: LobeSlug }
@@ -35,6 +48,9 @@ const LOBE_URLS: Record<LobeSlug, string> = {
   deepseek: deepseekUrl,
   kimi: kimiUrl,
   qoder: qoderUrl,
+  codebuddy: codebuddyUrl,
+  kiro: kiroUrl,
+  pi: piUrl,
 };
 
 const AGENT_SLUG = {
@@ -43,6 +59,11 @@ const AGENT_SLUG = {
   grok: "xai",
   kimi: "kimi",
   qoder: "qoder",
+  codebuddy: "codebuddy",
+  gemini: "gemini",
+  kiro: "kiro",
+  pi: "pi",
+  dsh: "deepseek",
 } as const;
 
 export function agentHexIcon(agent: string): HexIcon | null {
