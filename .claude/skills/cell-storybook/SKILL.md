@@ -57,6 +57,10 @@ out problems you notice, for example:
 
 ## Before / after a visual change
 
+Cell proportions, timings and fades derive from the golden ratio in `src/cells/golden.ts` and are
+locked by `src/cells/golden.test.ts` (`pnpm test`). A visual change that alters them is a design
+change: update both files together, and run `pnpm test` alongside the storybook.
+
 Run it once before editing (`--out storybook-out/before`), make the change, run again
 (`--out storybook-out/after`), and show both sheets, or pair the individual crops, so the user sees the
 difference rather than a description of it.

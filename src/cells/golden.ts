@@ -17,6 +17,8 @@ export type CellGeometry = {
   badgeRadius: number;
   badgeOutline: number;
   badgeAngle: number;
+  // Font size of the glyph inside the badge ("!"): the golden section of the badge's diameter.
+  badgeGlyph: number;
 };
 
 export function cellGeometry(apothem: number): CellGeometry {
@@ -31,6 +33,7 @@ export function cellGeometry(apothem: number): CellGeometry {
     badgeRadius,
     badgeOutline: ringWidth / PHI,
     badgeAngle: -Math.atan(PHI),
+    badgeGlyph: (badgeRadius * 2) / PHI,
   };
 }
 
@@ -38,3 +41,26 @@ export function cellGeometry(apothem: number): CellGeometry {
 export function phiFade(n: number): number {
   return PHI ** -n;
 }
+
+// Animation timing: multiples of φ seconds.
+export const MOTION = {
+  // Busy spinner: one turn per φ s; the arc stretches between 2π/φ³ and 2π/φ every φ² s.
+  spinMs: 1000 * PHI,
+  stretchMs: 1000 * PHI ** 2,
+  arcMin: (Math.PI * 2) / PHI ** 3,
+  arcMax: (Math.PI * 2) / PHI,
+  // Waiting: fill and ring breathe once per φ s.
+  pulseMs: 1000 * PHI,
+} as const;
+
+// Opacities: negative powers of φ.
+export const FADES = {
+  // History sessions are faded so running ones stand out.
+  history: phiFade(2),
+  busyTrack: phiFade(4),
+  idleTrack: phiFade(3),
+  // Waiting fill breathes between these, the ring between waitingRingMin and 1.
+  waitingFillMin: phiFade(4),
+  waitingFillMax: phiFade(2),
+  waitingRingMin: phiFade(1),
+} as const;

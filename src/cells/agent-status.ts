@@ -1,25 +1,17 @@
 import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { connectLiveSessions, type Layout, type LiveSession, type ProjectLabel } from "../live";
 import { armPop, popScale } from "./pop";
-import { cellGeometry, PHI, phiFade, type CellGeometry } from "./golden";
+import { cellGeometry, FADES, MOTION, type CellGeometry } from "./golden";
 import type { BoardCell, CellFrame, CellModule } from "./types";
 
-// Sizes come from the golden-ratio geometry in ./golden, measured from the hex's apothem.
-// History sessions are drawn faded so the running ones stand out.
-const HISTORY_ALPHA = phiFade(2);
+// Every size, timing and opacity comes from ./golden (golden ratio, locked by golden.test.ts);
+// only colours live here.
 const IDLE = "#22c55e";
 const BUSY = "#2563eb";
 const WAITING = "#f59e0b";
 // Waiting fills its whole hex with a breathing tint behind the icon.
 const WAITING_FILL = "#f59e0b";
 const WAITING_RING = true;
-// Busy spinner: one turn per φ seconds; the arc stretches between 2π/φ³ and 2π/φ every φ² seconds.
-const SPIN_MS = 1000 * PHI;
-const STRETCH_MS = 1000 * PHI ** 2;
-const ARC_MIN = (Math.PI * 2) / PHI ** 3;
-const ARC_MAX = (Math.PI * 2) / PHI;
-// Waiting: the ring breathes and a ripple spreads outward once per φ seconds.
-const PULSE_MS = 1000 * PHI;
 const BASE_TITLE = document.title;
 
 type AgentCell = BoardCell & { session: LiveSession };
@@ -76,11 +68,11 @@ function drawBusy(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy
   ctx.lineWidth = g.ringWidth * scale;
   ctx.lineCap = "round";
   // Faint track so the moving arc reads as progress around a ring, not a stray stroke.
-  ctx.strokeStyle = `rgba(37, 99, 235, ${phiFade(4)})`;
+  ctx.strokeStyle = `rgba(37, 99, 235, ${FADES.busyTrack})`;
   ring(ctx, cx, cy, radius);
-  const stretch = (1 - Math.cos(((now % STRETCH_MS) / STRETCH_MS) * Math.PI * 2)) / 2;
-  const length = ARC_MIN + (ARC_MAX - ARC_MIN) * stretch;
-  const head = ((now % SPIN_MS) / SPIN_MS) * Math.PI * 2 - Math.PI / 2;
+  const stretch = (1 - Math.cos(((now % MOTION.stretchMs) / MOTION.stretchMs) * Math.PI * 2)) / 2;
+  const length = MOTION.arcMin + (MOTION.arcMax - MOTION.arcMin) * stretch;
+  const head = ((now % MOTION.spinMs) / MOTION.spinMs) * Math.PI * 2 - Math.PI / 2;
   ctx.strokeStyle = BUSY;
   ring(ctx, cx, cy, radius, head - length, head);
   ctx.restore();
@@ -99,14 +91,14 @@ function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: num
 }
 
 function breathOf(now: number): number {
-  return (1 - Math.cos(((now % PULSE_MS) / PULSE_MS) * Math.PI * 2)) / 2;
+  return (1 - Math.cos(((now % MOTION.pulseMs) / MOTION.pulseMs) * Math.PI * 2)) / 2;
 }
 
 // Drawn under the icon: the hex fills with a tint breathing between φ⁻⁴ and φ⁻² opacity.
 function drawWaitingFill(ctx: CanvasRenderingContext2D, frame: CellFrame, now: number): void {
   ctx.save();
   ctx.fillStyle = WAITING_FILL;
-  ctx.globalAlpha = phiFade(4) + (phiFade(2) - phiFade(4)) * breathOf(now);
+  ctx.globalAlpha = FADES.waitingFillMin + (FADES.waitingFillMax - FADES.waitingFillMin) * breathOf(now);
   hexPath(ctx, frame.x, frame.y, frame.width, frame.midY - frame.y);
   ctx.fill();
   ctx.restore();
@@ -117,7 +109,7 @@ function drawWaiting(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number,
   if (!WAITING_RING) return;
   ctx.save();
   ctx.strokeStyle = WAITING;
-  ctx.globalAlpha = phiFade(1) + (1 - phiFade(1)) * breathOf(now);
+  ctx.globalAlpha = FADES.waitingRingMin + (1 - FADES.waitingRingMin) * breathOf(now);
   ctx.lineWidth = g.ringWidth * scale;
   ring(ctx, cx, cy, g.ringRadius * scale);
   ctx.restore();
@@ -127,7 +119,7 @@ function drawWaiting(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number,
 function drawIdle(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number): void {
   ctx.save();
   ctx.lineWidth = g.ringWidth * scale;
-  ctx.strokeStyle = `rgba(34, 197, 94, ${phiFade(3)})`;
+  ctx.strokeStyle = `rgba(34, 197, 94, ${FADES.idleTrack})`;
   ring(ctx, cx, cy, g.ringRadius * scale);
   ctx.restore();
 }
@@ -155,8 +147,7 @@ function drawBadge(
   ctx.fill();
   if (status === "waiting") {
     ctx.fillStyle = "#fff";
-    // The "!" fills the golden section of the badge's diameter.
-    ctx.font = `800 ${Math.round((radius * 2) / PHI)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.font = `800 ${Math.round(g.badgeGlyph * scale)}px ui-sans-serif, system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("!", x, y + 0.5 * scale);
@@ -211,7 +202,7 @@ export const agentStatus: CellModule = {
     const now = performance.now();
     if (agent.session.live && status === "waiting") drawWaitingFill(ctx, frame, now);
     ctx.save();
-    if (!agent.session.live) ctx.globalAlpha = HISTORY_ALPHA;
+    if (!agent.session.live) ctx.globalAlpha = FADES.history;
     drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
     ctx.restore();
     if (!agent.session.live) return;

@@ -14,14 +14,19 @@ pnpm install
 pnpm dev
 pnpm build
 pnpm preview
+pnpm test
 ```
+
+`pnpm test` locks the golden-ratio design of a cell (`src/cells/golden.ts`): proportions, timings and
+fades all derive from φ, and the test fails if one drifts or if drawing code hard-codes its own sizes.
 
 ## Agent sessions
 
 `pnpm dev` also starts a small local server (`server/`) that finds every coding-agent session on
-this machine and puts one on each hex, grouped by project. Running sessions are drawn in full colour
-with a green dot; past ones are faded. Right-click a hex for its title, model, a copyable resume
-command and the latest question and answer.
+this machine and puts one on each hex, grouped by project. Running sessions carry a status ring —
+a quiet green track when idle, a spinning blue arc while working, and an amber fill with a "!" when
+waiting on you — and past ones are faded. Right-click a hex for its title, model, a copyable resume
+command and the whole conversation.
 
 Sessions are read-only from each agent's own files, following the adapters of
 [Wake](https://github.com/iAmCorey/Wake) (MIT):
