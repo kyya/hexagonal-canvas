@@ -296,3 +296,50 @@ export function writeAged(home: string, n: number, daysAgo: number, prompt: stri
   claudeLike(home, ".claude", id, Date.now() - daysAgo * DAY, prompt, "claude-opus-5-5");
   return { id: `claude:${id}`, agent: "claude", state: "history", label: prompt };
 }
+
+function codexThread(home: string, id: string, at: number, prompt: string, meta: Record<string, unknown>): void {
+  const time = new Date(at).toISOString();
+  write(
+    join(home, ".codex", "sessions", "2026", "09", "02", `rollout-2026-09-02T10-00-00-${id}.jsonl`),
+    jsonl([
+      { timestamp: time, type: "session_meta", payload: { id, cwd: PROJECT, originator: "codex_cli_rs", source: "cli", ...meta } },
+      { timestamp: time, type: "turn_context", payload: { cwd: PROJECT, model: "gpt-5.5-codex" } },
+      { timestamp: time, type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: prompt }] } },
+    ]),
+  );
+}
+
+// A Codex thread with a spawned sub-agent and a fork of it, created one after another.
+export function writeCodexFamily(home: string, firstN: number): { parent: Story; spawn: Story; fork: Story } {
+  const [parentId, spawnId, forkId] = [uuid(firstN), uuid(firstN + 1), uuid(firstN + 2)];
+  codexThread(home, parentId, BASE + firstN * 60_000, "Codex 主线程：重构支付", {});
+  codexThread(home, spawnId, BASE + (firstN + 1) * 60_000, "子任务", {
+    source: { subagent: { thread_spawn: { parent_thread_id: parentId, agent_path: "/root/payments_tests", agent_nickname: "tests" } } },
+  });
+  codexThread(home, forkId, BASE + (firstN + 2) * 60_000, "Codex 分叉：换个方案", { forked_from_id: parentId });
+  const story = (id: string, label: string): Story => ({ id: `codex:${id}`, agent: "codex", state: "history", label });
+  return { parent: story(parentId, "Codex 主线程：重构支付"), spawn: story(spawnId, "payments_tests"), fork: story(forkId, "Codex 分叉：换个方案") };
+}
+
+// A Grok session with a sub-agent registered under it (subagents/<x>/meta.json).
+export function writeGrokFamily(home: string, firstN: number): { parent: Story; child: Story } {
+  const group = join(home, ".grok", "sessions", encodeURIComponent(PROJECT));
+  const make = (id: string, n: number, title: string) => {
+    const at = BASE + n * 60_000;
+    write(
+      join(group, id, "updates.jsonl"),
+      jsonl([{ timestamp: at / 1000, method: "session/update", params: { update: { sessionUpdate: "user_message_chunk", content: { text: title } } } }]),
+    );
+    write(
+      join(group, id, "summary.json"),
+      JSON.stringify({ generated_title: title, info: { cwd: PROJECT }, created_at: new Date(at).toISOString(), updated_at: new Date(at).toISOString() }),
+    );
+  };
+  const parentId = uuid(firstN);
+  const childId = uuid(firstN + 1);
+  make(parentId, firstN, "Grok 编排任务");
+  make(childId, firstN + 1, "Grok 子代理：查文档");
+  write(join(group, parentId, "subagents", "docs", "meta.json"), JSON.stringify({ parent_session_id: parentId, child_session_id: childId, subagent_id: "docs" }));
+  const story = (id: string, label: string): Story => ({ id: `grok:${id}`, agent: "grok", state: "history", label });
+  return { parent: story(parentId, "Grok 编排任务"), child: story(childId, "Grok 子代理：查文档") };
+}

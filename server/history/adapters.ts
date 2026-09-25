@@ -319,6 +319,8 @@ const codex: Adapter = {
     let model: string | null = null;
     let spawnTitle = "";
     let sawMeta = false;
+    let parentId: string | null = null;
+    let relation: "fork" | "spawn" | null = null;
     const times: (string | null)[] = [];
     for (const row of rows) {
       times.push(iso(row.timestamp));
@@ -329,6 +331,14 @@ const codex: Adapter = {
         cwd = str(payload.cwd);
         const spawn = obj(obj(obj(payload.source)?.subagent)?.thread_spawn);
         if (spawn) spawnTitle = str(spawn.agent_path).split("/").filter(Boolean).at(-1) || str(spawn.agent_nickname);
+        // A spawned sub-agent names its parent thread; a fork names the thread it was forked from.
+        if (spawn && str(spawn.parent_thread_id)) {
+          parentId = `codex:${str(spawn.parent_thread_id)}`;
+          relation = "spawn";
+        } else if (str(payload.forked_from_id)) {
+          parentId = `codex:${str(payload.forked_from_id)}`;
+          relation = "fork";
+        }
       }
       if (row.type === "turn_context") {
         if (!cwd) cwd = str(payload.cwd);
@@ -344,6 +354,8 @@ const codex: Adapter = {
       ...span(times),
       model,
       messages: countTurns(turns),
+      parentId,
+      relation,
     };
   },
   turns(file) {
@@ -681,6 +693,18 @@ function decodeGrokDir(name: string): string {
   }
 }
 
+// Grok registers sub-agents under the parent: <group>/<parent>/subagents/<x>/meta.json.
+function grokParent(group: string, child: string): string | null {
+  for (const session of entries(group)) {
+    if (!session.dir || session.name === child) continue;
+    for (const sub of entries(join(session.path, "subagents"))) {
+      const meta = obj(readJson(join(sub.path, "meta.json")));
+      if (meta && str(meta.child_session_id) === child) return str(meta.parent_session_id) || session.name;
+    }
+  }
+  return null;
+}
+
 const grok: Adapter = {
   agent: "grok",
   files() {
@@ -699,8 +723,11 @@ const grok: Adapter = {
     const summary = obj(readJson(join(dir, "summary.json")));
     const { turns, times } = grokTurns(jsonLines(file));
     const groupCwd = readText(join(dirname(dir), ".cwd")).trim() || decodeGrokDir(basename(dirname(dir)));
+    const parent = grokParent(dirname(dir), basename(dir));
     return {
       nativeId: basename(dir),
+      parentId: parent ? `grok:${parent}` : null,
+      relation: parent ? "spawn" : null,
       title: pickTitle(str(summary?.generated_title), str(summary?.session_summary), firstPrompt(turns)),
       cwd: str(obj(summary?.info)?.cwd) || groupCwd,
       createdAt: iso(summary?.created_at) ?? mtimeIso(file),

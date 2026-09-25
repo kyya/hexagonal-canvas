@@ -3,6 +3,7 @@ import "./hud.css";
 import { startLensSwitcher } from "./lens-switcher";
 import { startMinimap } from "./minimap";
 import { startNextWaiting } from "./next-waiting";
+import { startReplay } from "./replay";
 import { startSearch } from "./search";
 
 export function startHud(): void {
@@ -12,4 +13,5 @@ export function startHud(): void {
   startLensSwitcher(root);
   startMinimap(root);
   startSearch(root);
+  startReplay(root);
 }
