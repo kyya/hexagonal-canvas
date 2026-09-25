@@ -1,9 +1,10 @@
 import { agentStatus } from "./agent-status";
+import { pinsModule } from "./pins";
 import { territory } from "./territory";
 import type { BoardCell, CellDetails, CellFrame, CellMenu, CellModule, OverlayFrame } from "./types";
 
 // Draw order: territory borders and banners overlay the agent cells.
-const modules: CellModule[] = [agentStatus, territory];
+const modules: CellModule[] = [agentStatus, pinsModule, territory];
 
 export type PlacedCell = {
   module: CellModule;
@@ -40,6 +41,10 @@ export function clickAt(x: number, y: number): boolean {
 
 export function describePlaced(placed: PlacedCell): CellDetails | null {
   return placed.module.describe?.(placed.cell) ?? null;
+}
+
+export function openEmptyMenu(col: number, row: number, menu: CellMenu): boolean {
+  return modules.some((module) => module.menuEmpty?.(col, row, menu) ?? false);
 }
 
 export function openPlacedMenu(placed: PlacedCell, menu: CellMenu): void {

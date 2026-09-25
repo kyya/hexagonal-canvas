@@ -3,6 +3,7 @@ import "./hud.css";
 import { startLensSwitcher } from "./lens-switcher";
 import { startMinimap } from "./minimap";
 import { startNextWaiting } from "./next-waiting";
+import { startSearch } from "./search";
 
 export function startHud(): void {
   const root = document.querySelector<HTMLElement>("#hud");
@@ -10,4 +11,5 @@ export function startHud(): void {
   startNextWaiting(root);
   startLensSwitcher(root);
   startMinimap(root);
+  startSearch(root);
 }

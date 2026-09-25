@@ -6,6 +6,8 @@
 //   icon radius : badge radius      =  φ² : 1
 //   badge radius : badge outline    =  φ³ : 1
 //   badge diameter : glyph size     =  φ  : 1
+//   apothem : yield offset          =  φ  : 1   (yield number centre below the icon centre)
+//   icon radius : yield font        =  φ  : 1
 //
 // A session's state is a soft tint filling the hex. The tints breathe with periods that are powers
 // of φ seconds, and every opacity is a negative power of φ. Only the waiting state adds a small
@@ -20,6 +22,8 @@ export type CellGeometry = {
   badgeRadius: number;
   badgeOutline: number;
   badgeGlyph: number;
+  yieldOffset: number;
+  yieldFont: number;
 };
 
 export function cellGeometry(apothem: number): CellGeometry {
@@ -32,6 +36,8 @@ export function cellGeometry(apothem: number): CellGeometry {
     badgeRadius,
     badgeOutline: badgeRadius / PHI ** 3,
     badgeGlyph: (badgeRadius * 2) / PHI,
+    yieldOffset: apothem / PHI,
+    yieldFont: iconRadius / PHI,
   };
 }
 

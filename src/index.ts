@@ -2,6 +2,7 @@ import {
   clickAt,
   describePlaced,
   drawOverlays,
+  openEmptyMenu,
   drawPlacedCell,
   openPlacedMenu,
   placedCellAt,
@@ -13,7 +14,7 @@ import { startHud } from "./hud/hud";
 import { currentLayout } from "./live";
 import { installView } from "./view";
 import { cellGeometry, PHI } from "./cells/golden";
-import type { CellDetails } from "./cells/types";
+import type { CellDetails, CellForm, CellMenu } from "./cells/types";
 import { mountTranscript } from "./transcript/TranscriptView";
 import "./app.css";
 import { beginFrame, popScale, pumpPops } from "./cells/pop";
@@ -97,12 +98,14 @@ let suppressClick = false;
 const menuRoot = document.querySelector<HTMLElement>("#hex-menu");
 const menuTranscriptNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-transcript");
 const menuDetailsNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-details");
-if (!menuRoot || !menuTranscriptNode || !menuDetailsNode) {
+const menuFormNode = menuRoot?.querySelector<HTMLElement>(".hex-menu-form");
+if (!menuRoot || !menuTranscriptNode || !menuDetailsNode || !menuFormNode) {
   throw new Error("Missing hex menu");
 }
 const menu: HTMLElement = menuRoot;
 const menuTranscript: HTMLElement = menuTranscriptNode;
 const menuDetails: HTMLElement = menuDetailsNode;
+const menuForm: HTMLElement = menuFormNode;
 canvas.style.touchAction = "none";
 canvas.addEventListener("contextmenu", onContextMenu);
 canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -254,10 +257,6 @@ function onContextMenu(event: MouseEvent): void {
   event.preventDefault();
   const world = screenToWorld(event.offsetX, event.offsetY);
   const hex = pixelToHex(world.x, world.y);
-  if (!placedCellAt(hex.col, hex.row)) {
-    closeMenu();
-    return;
-  }
   openMenu(hex, event.clientX, event.clientY);
 }
 
@@ -265,16 +264,18 @@ function openMenu(hex: Hex, x: number, y: number): void {
   hideTooltip();
   menuTranscript.hidden = true;
   menuDetails.hidden = true;
+  menuForm.hidden = true;
+  const api: CellMenu = {
+    showDetails,
+    showTranscript,
+    showForm,
+  };
   const placed = placedCellAt(hex.col, hex.row);
   if (placed) {
-    openPlacedMenu(placed, {
-      showDetails(details) {
-        showDetails(details);
-      },
-      showTranscript(sessionId, live) {
-        showTranscript(sessionId, live);
-      },
-    });
+    openPlacedMenu(placed, api);
+  } else if (!openEmptyMenu(hex.col, hex.row, api)) {
+    closeMenu();
+    return;
   }
   menu.hidden = false;
   menu.style.left = `${x}px`;
@@ -293,7 +294,49 @@ function closeMenu(): void {
   menu.hidden = true;
   menuTranscript.hidden = true;
   menuDetails.hidden = true;
+  menuForm.hidden = true;
   mountTranscript(menuTranscript, null);
+}
+
+function showForm(form: CellForm): void {
+  const title = document.createElement("div");
+  title.className = "hex-menu-title";
+  title.textContent = form.title;
+  const input = document.createElement("input");
+  input.className = "hex-menu-input";
+  input.value = form.value;
+  input.placeholder = form.placeholder;
+  const actions = document.createElement("div");
+  actions.className = "hex-menu-actions";
+  const submit = document.createElement("button");
+  submit.type = "button";
+  submit.className = "hex-menu-submit";
+  submit.textContent = form.submitLabel;
+  const done = () => {
+    form.onSubmit(input.value);
+    closeMenu();
+  };
+  submit.addEventListener("click", done);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") done();
+    if (event.key === "Escape") closeMenu();
+  });
+  actions.append(submit);
+  if (form.onDelete) {
+    const onDelete = form.onDelete;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "hex-menu-delete";
+    remove.textContent = "移除";
+    remove.addEventListener("click", () => {
+      onDelete();
+      closeMenu();
+    });
+    actions.append(remove);
+  }
+  menuForm.replaceChildren(title, input, actions);
+  menuForm.hidden = false;
+  requestAnimationFrame(() => input.focus());
 }
 
 function showDetails(details: CellDetails): void {

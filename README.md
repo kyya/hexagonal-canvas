@@ -52,6 +52,14 @@ command and the whole conversation.
   Civ's 2D map; the **minimap** (bottom-left) shows everything and moves the camera on click or drag.
 - **Fog of war**: history sessions untouched for 30 days are veiled in grey (state lens).
 
+### Notes and search
+
+- **Yields** (`Y` or the 数字 chip): each cell shows its message count in a small pill under the icon.
+- **Search** (`/` or `⌘K`): dims everything that does not match title, project, agent, model or pin
+  note, lists the hits, and `Enter` flies to the selected one.
+- **Map pins**: right-click an empty hex to drop a note; right-click the pin to edit or remove it.
+  Pins live in this browser's storage and show up in the tooltip and search.
+
 Sessions are read-only from each agent's own files, following the adapters of
 [Wake](https://github.com/iAmCorey/Wake) (MIT):
 
