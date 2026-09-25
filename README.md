@@ -15,7 +15,15 @@ pnpm dev
 pnpm build
 pnpm preview
 pnpm test
+pnpm test:e2e
 ```
+
+`pnpm test:e2e` runs the whole app against a throwaway fixture `$HOME` (one session per agent, plus
+live sessions backed by stand-in processes) and drives it in Chromium: session discovery, the state
+tints and badge read back from canvas pixels, the right-click menu and transcript, and live updates
+(a status change, a process exiting, a new session file, a new reply). It needs Playwright with
+Chromium (`npm i -g playwright && npx playwright install chromium`) and never touches your real
+`$HOME` or a running `pnpm dev`.
 
 `pnpm test` locks the golden-ratio design of a cell (`src/cells/golden.ts`): proportions, timings and
 breathing all derive from φ, and the test fails if one drifts or if drawing code hard-codes its own sizes.

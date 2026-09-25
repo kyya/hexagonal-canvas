@@ -1,7 +1,8 @@
+// Shared by the end-to-end tests and the cell-storybook skill.
 // Writes a throwaway $HOME holding one session per agent in that agent's real on-disk format, plus
 // Claude sessions that the storybook registers as live (idle / busy / waiting). Every session lives
 // in the same project so the canvas lays them out as one cluster, in `createdAt` order.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const PROJECT = "/storybook/hexagonal";
@@ -49,9 +50,13 @@ function uuid(n: number): string {
 
 const slug = `-${PROJECT.replace(/^\/+/, "").replaceAll("/", "-")}`;
 
+export function claudeSessionFile(home: string, id: string, dir = ".claude"): string {
+  return join(home, dir, "projects", slug, `${id}.jsonl`);
+}
+
 function claudeLike(home: string, dir: string, id: string, at: number, prompt: string, model: string): void {
   write(
-    join(home, dir, "projects", slug, `${id}.jsonl`),
+    claudeSessionFile(home, id, dir),
     jsonl([
       { type: "user", cwd: PROJECT, sessionId: id, timestamp: new Date(at).toISOString(), message: { role: "user", content: prompt } },
       {
@@ -239,5 +244,27 @@ export function registerLive(home: string, story: Story, pid: number): void {
       status: story.state,
       ...(story.waitingFor ? { waitingFor: story.waitingFor } : {}),
     }),
+  );
+}
+
+// A new Claude session appearing mid-test (the canvas should add a cell for it).
+export function addClaudeSession(home: string, n: number, prompt: string): string {
+  const id = uuid(n);
+  claudeLike(home, ".claude", id, BASE + n * 60_000, prompt, "claude-opus-5-5");
+  return `claude:${id}`;
+}
+
+// The agent writing another reply into an existing Claude session.
+export function appendClaudeReply(home: string, storyId: string, text: string): void {
+  const id = storyId.slice("claude:".length);
+  appendFileSync(
+    claudeSessionFile(home, id),
+    JSON.stringify({
+      type: "assistant",
+      cwd: PROJECT,
+      sessionId: id,
+      timestamp: new Date().toISOString(),
+      message: { id: `msg-${Date.now()}`, role: "assistant", model: "claude-opus-5-5", content: [{ type: "text", text }] },
+    }) + "\n",
   );
 }

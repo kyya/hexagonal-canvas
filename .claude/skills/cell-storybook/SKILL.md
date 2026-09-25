@@ -68,13 +68,14 @@ difference rather than a description of it.
 
 ## Extending it
 
-- New visual state: add it to `LIVE_STORIES` in `scripts/fixtures.ts` (live states are Claude sessions
+- New visual state: add it to `LIVE_STORIES` in `test/fixtures/sessions.ts` (live states are Claude sessions
   whose registry `status` drives the look) and handle its caption in `sheetHtml` in
   `scripts/storybook.ts` if it animates.
-- New agent: add a writer to `writers` in `scripts/fixtures.ts` producing the smallest file that agent's
+- New agent: add a writer to `writers` in `test/fixtures/sessions.ts` producing the smallest file that agent's
   adapter accepts, and add the agent to `HISTORY_AGENTS`.
-- Geometry constants in `storybook.ts` mirror `src/index.ts` (hex side 64). If the hex size changes
-  there, change it here too or the crops will be off-centre.
+- The fixtures and the app launcher live in `test/` and are shared with the end-to-end tests
+  (`pnpm test:e2e`). Hex geometry in `test/harness.ts` mirrors `src/index.ts` (side 64); if the hex
+  size changes there, change it in the harness too or the crops will be off-centre.
 
 ## Requirements
 

@@ -8,6 +8,7 @@
     "server": "node --experimental-strip-types server/index.ts",
     "build": "tsc && vite build",
     "test": "node --experimental-strip-types --no-warnings --test \"src/**/*.test.ts\"",
+    "test:e2e": "node --experimental-strip-types --no-warnings --test --test-concurrency=1 \"test/e2e/*.test.ts\"",
     "preview": "vite preview"
   },
   "devDependencies": {

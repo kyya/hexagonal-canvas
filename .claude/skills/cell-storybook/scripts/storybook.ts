@@ -12,30 +12,12 @@
 //
 // It never touches the real $HOME or a running `pnpm dev`: sessions come from a throwaway fixture
 // HOME, live processes are `sleep` children, and the server + Vite run on their own ports.
-import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { place, type ApiSession } from "../../../../src/live.ts";
-import { HISTORY_AGENTS, registerLive, writeFixtures, type Story } from "./fixtures.ts";
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
-
-// Hex geometry, kept in step with src/index.ts.
-const SIDE = 64;
-const HEX_RADIUS = Math.cos(Math.PI / 6) * SIDE;
-const HEX_HEIGHT = Math.sin(Math.PI / 6) * SIDE;
-const RECT_W = 2 * HEX_RADIUS;
-const RECT_H = SIDE + 2 * HEX_HEIGHT;
-const ROW_STEP = SIDE + HEX_HEIGHT;
-
-function hexCentre(col: number, row: number): { x: number; y: number } {
-  const parity = ((row % 2) + 2) % 2;
-  return { x: col * RECT_W + parity * HEX_RADIUS + HEX_RADIUS, y: row * ROW_STEP + SIDE };
-}
+import { join, resolve } from "node:path";
+import { place } from "../../../../src/live.ts";
+import { HISTORY_AGENTS, registerLive, writeFixtures, type Story } from "../../../../test/fixtures/sessions.ts";
+import { HEX_RADIUS, hexCentre, loadPlaywright, RECT_H, RECT_W, ROOT, startApp, type App } from "../../../../test/harness.ts";
 
 type Options = { out: string; agents: string[]; zoom: number; frames: number; interval: number; keep: boolean };
 
@@ -60,78 +42,6 @@ function parseArgs(argv: string[]): Options {
     else throw new Error(`Unknown option ${arg}`);
   }
   return options;
-}
-
-// Playwright is not a project dependency: use a local copy if there is one, else the global install.
-function loadPlaywright(): typeof import("playwright") {
-  const require = createRequire(import.meta.url);
-  const candidates = ["playwright", "@playwright/test"];
-  for (const name of candidates) {
-    try {
-      return require(name);
-    } catch {
-      // try the next one
-    }
-  }
-  try {
-    const globalRoot = execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim();
-    for (const name of candidates) {
-      try {
-        return require(join(globalRoot, name));
-      } catch {
-        // try the next one
-      }
-    }
-  } catch {
-    // npm missing
-  }
-  throw new Error("Playwright not found. Install it with `npm i -g playwright && npx playwright install chromium`.");
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const server = createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const port = typeof address === "object" && address ? address.port : 0;
-      server.close(() => resolvePort(port));
-    });
-  });
-}
-
-const children: ChildProcess[] = [];
-
-function start(command: string, args: string[], env: NodeJS.ProcessEnv): ChildProcess {
-  const child = spawn(command, args, { cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"] });
-  children.push(child);
-  return child;
-}
-
-function stopAll(): void {
-  for (const child of children) {
-    if (child.exitCode === null) child.kill();
-  }
-}
-
-async function waitForSessions(url: string, expected: number): Promise<ApiSession[]> {
-  const deadline = Date.now() + 30_000;
-  let last = "";
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const payload = (await response.json()) as { sessions: ApiSession[] };
-        last = `${payload.sessions.length} sessions`;
-        if (payload.sessions.length >= expected) return payload.sessions;
-      }
-    } catch (error) {
-      last = String(error);
-    }
-    await new Promise((done) => setTimeout(done, 300));
-  }
-  throw new Error(`Server never reported ${expected} sessions (last: ${last})`);
 }
 
 type Crop = { story: Story; col: number; row: number; frames: string[]; missing: boolean };
@@ -174,27 +84,17 @@ async function main(): Promise<void> {
   const home = mkdtempSync(join(tmpdir(), "hex-storybook-"));
   const stories = writeFixtures(home, options.agents);
 
-  // Live sessions need a real, running pid; a long `sleep` stands in for the agent process.
-  for (const story of stories.filter((item) => item.state !== "history")) {
-    const sleeper = start("sleep", ["3600"], process.env);
-    if (!sleeper.pid) throw new Error("could not start a stand-in process");
-    registerLive(home, story, sleeper.pid);
-  }
-
-  const apiPort = await freePort();
-  const webPort = await freePort();
-  const env = { ...process.env, HOME: home, HEX_API_PORT: String(apiPort) };
-  const logs: string[] = [];
-  const server = start(process.execPath, ["--experimental-strip-types", "--no-warnings", "server/index.ts"], env);
-  const vite = start(process.execPath, ["node_modules/vite/bin/vite.js", "--port", String(webPort), "--strictPort"], env);
-  for (const child of [server, vite]) {
-    child.stdout?.on("data", (data) => logs.push(String(data)));
-    child.stderr?.on("data", (data) => logs.push(String(data)));
-  }
-
+  let app: App | null = null;
   try {
-    const base = `http://127.0.0.1:${webPort}`;
-    const sessions = await waitForSessions(`${base}/api/sessions`, stories.length);
+    app = await startApp(home);
+    // Live sessions need a real, running pid; a long `sleep` stands in for the agent process.
+    for (const story of stories.filter((item) => item.state !== "history")) {
+      const pid = app.standIn().pid;
+      if (!pid) throw new Error("could not start a stand-in process");
+      registerLive(home, story, pid);
+    }
+    const base = app.base;
+    const sessions = await app.waitForSessions((list) => list.length >= stories.length, `${stories.length} sessions`);
     const layout = place(sessions);
     const byId = new Map(layout.sessions.map((session) => [session.id, session]));
 
@@ -288,22 +188,16 @@ async function main(): Promise<void> {
     console.log(`sheet: ${join(options.out, "sheet.png")}`);
     console.log(`cells: ${crops.length - missing.length}/${crops.length}${missing.length ? ` (missing: ${missing.join(", ")})` : ""}`);
   } catch (error) {
-    console.error(logs.join(""));
+    console.error(app?.logs.join("") ?? "");
     throw error;
   } finally {
-    stopAll();
+    app?.stop();
     if (options.keep) console.log(`fixture HOME kept at ${home}`);
     else rmSync(home, { recursive: true, force: true });
   }
 }
 
-process.on("SIGINT", () => {
-  stopAll();
-  process.exit(130);
-});
-
 main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error);
-  stopAll();
   process.exit(1);
 });
