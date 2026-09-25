@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, insetOf, PHI, phiFade, prismHeight, safeHalfWidth, STRATEGIC_ZOOM, TILT, tiltRise, tiltSquash } from "./golden.ts";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, insetOf, PHI, phiFade, prismHeight, safeHalfWidth, STICKER, STRATEGIC_ZOOM, TILT, tiltRise, tiltSquash } from "./golden.ts";
 
 // The canvas hex: side 64, so the apothem (inscribed radius, half the cell width) is 64·cos 30°.
 const APOTHEM = Math.cos(Math.PI / 6) * 64;
@@ -249,6 +249,23 @@ describe("tilted view", () => {
     const maxWidth = 2 * safeHalfWidth(t, offset - half, offset + half);
     assert.ok(maxWidth >= 3 * t.noteFont, `note line only ${maxWidth} wide`);
     assert.ok(inZone(maxWidth / 2, offset + half) && inZone(-maxWidth / 2, offset - half));
+  });
+});
+
+describe("sticker icons", () => {
+  test("the die-cut border is φ⁻⁴ of the icon radius, closing gaps up to φ² borders", () => {
+    close(STICKER.border, PHI ** -4, "border");
+    close(STICKER.closing, PHI ** 2, "closing");
+  });
+  test("the shadow: blur = border · φ, offset = border / φ, φ⁻³ black", () => {
+    close(STICKER.shadowBlur, STICKER.border * PHI, "blur");
+    close(STICKER.shadowOffset, STICKER.border / PHI, "offset");
+    close(STICKER.shadowAlpha, PHI ** -3, "alpha");
+  });
+  test("the border stays inside the waiting badge's clearance", () => {
+    const g = cellGeometry(APOTHEM);
+    const edge = (g.iconSize / 2) * (1 + STICKER.border);
+    assert.ok(edge < g.badgeDistance, "the badge centre lies beyond the sticker's edge");
   });
 });
 

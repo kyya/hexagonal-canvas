@@ -33,7 +33,7 @@ breathing all derive from φ, and the test fails if one drifts or if drawing cod
 `pnpm dev` also starts a small local server (`server/`) that finds every coding-agent session on
 this machine and puts one on each hex, grouped by project. A running session tints its hex and
 breathes: still pale green when idle, shallow quick blue breaths while working, deep slow amber
-breaths when it is waiting on you. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
+breaths when it is waiting on you. Agent icons look like stickers — a white die-cut border and a soft shadow. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
 command and the whole conversation.
 
 ### Finding your way

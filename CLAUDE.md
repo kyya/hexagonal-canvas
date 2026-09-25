@@ -29,7 +29,9 @@ These are deliberate and locked by `src/cells/golden.test.ts`; change them only 
   classified as circle, square (filled tile), landscape or portrait; each is scaled to its keyline
   box so all shapes carry the same visual weight (square = the circle's area, rectangles span the
   diameter with the circle's area) and the ink, not the file padding, is centred
-  (`src/cells/keyline.ts`, locked by `keyline.test.ts`). Draw icons through `drawHexIcon`.
+  (`src/cells/keyline.ts`, locked by `keyline.test.ts`). Draw icons through `drawHexIcon`, which
+  also gives them their sticker look: a white die-cut border (φ⁻⁴ of the icon radius) and a soft
+  shadow cast down-right (`STICKER` in `golden.ts`).
 - **Keep the map calm.** Overlays that connect or annotate many cells (relation lines) draw only for
   the focused cell — hovered, or with its menu open (`src/focus.ts`) — never for everything at once.
 - **Tilted view keeps these rules.** Tilted (`src/tilt.ts`, `TILT` in `golden.ts`), the canvas is

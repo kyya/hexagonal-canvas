@@ -169,3 +169,16 @@ export function prismHeight(apothem: number, messages: number, maxMessages: numb
   const share = maxMessages > 0 ? Math.log1p(Math.max(0, messages)) / Math.log1p(maxMessages) : 0;
   return base + (top - base) * Math.min(1, share);
 }
+
+// Sticker look for agent icons: a white die-cut border hugging the logo's silhouette (concavities
+// narrower than a few borders are closed, like a real cut line), resting on the cell with a soft
+// shadow cast down and to the right, away from the upper-left light that shades the prisms.
+// Sizes are fractions of the icon radius; the shadow is φ⁻³ black.
+export const STICKER = {
+  border: phiFade(4),
+  // Concavities up to this many borders wide are closed by the cut line.
+  closing: PHI ** 2,
+  shadowBlur: phiFade(4) * PHI,
+  shadowOffset: phiFade(4) / PHI,
+  shadowAlpha: phiFade(3),
+} as const;
