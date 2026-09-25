@@ -14,9 +14,17 @@ import {
 import "./menu.css";
 
 export type TranscriptTurn = {
-  question: string;
-  answer: string;
+  role: "user" | "assistant";
+  text: string;
 };
+
+type Transcript = {
+  turns: TranscriptTurn[];
+  truncated: boolean;
+};
+
+// A running session keeps writing, so its open transcript refreshes on this interval.
+const LIVE_REFRESH_MS = 3000;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,40 +38,41 @@ const queryClient = new QueryClient({
   },
 });
 
-async function readTranscript(sessionId: string): Promise<TranscriptTurn> {
+async function readTranscript(sessionId: string): Promise<Transcript> {
   const response = await fetch(`/api/transcript?id=${encodeURIComponent(sessionId)}`);
   if (!response.ok) {
     throw new Error(`Transcript request failed: ${response.status}`);
   }
-  const payload = (await response.json()) as { question?: string; answer?: string };
+  const payload = (await response.json()) as Partial<Transcript>;
+  const turns = Array.isArray(payload.turns) ? payload.turns : [];
   return {
-    question: payload.question ?? "",
-    answer: payload.answer ?? "",
+    turns: turns.filter(
+      (turn): turn is TranscriptTurn =>
+        !!turn && (turn.role === "user" || turn.role === "assistant") && typeof turn.text === "string",
+    ),
+    truncated: payload.truncated === true,
   };
 }
 
-function hasTurn(turn: TranscriptTurn | undefined): turn is TranscriptTurn {
-  return !!turn && (turn.question !== "" || turn.answer !== "");
-}
-
-function TranscriptView({ question, answer }: TranscriptTurn) {
+function TranscriptView({ turns, truncated }: Transcript) {
   return (
-    <MessageScrollerProvider defaultScrollPosition="last-anchor" scrollPreviousItemPeek={0}>
+    // Opens at the latest question; follows new replies while scrolled to the bottom.
+    <MessageScrollerProvider defaultScrollPosition="last-anchor" scrollPreviousItemPeek={0} autoScroll>
       <MessageScroller>
         <MessageScrollerViewport aria-label="对话">
           <MessageScrollerContent>
-            <MessageScrollerItem messageId="question" scrollAnchor>
-              <Message from="user">
-                <MessageContent>{question || "（没有提问）"}</MessageContent>
-              </Message>
-            </MessageScrollerItem>
-            <MessageScrollerItem messageId="answer">
-              <Message from="assistant">
-                <MessageContent>
-                  {answer ? <Response>{answer}</Response> : "（还没有回复）"}
-                </MessageContent>
-              </Message>
-            </MessageScrollerItem>
+            {truncated && (
+              <MessageScrollerItem messageId="truncated">
+                <p className="hex-transcript-note">只显示最近的对话</p>
+              </MessageScrollerItem>
+            )}
+            {turns.map((turn, index) => (
+              <MessageScrollerItem key={index} messageId={`turn-${index}`} scrollAnchor={turn.role === "user"}>
+                <Message from={turn.role}>
+                  <MessageContent>{turn.role === "assistant" ? <Response>{turn.text}</Response> : turn.text}</MessageContent>
+                </Message>
+              </MessageScrollerItem>
+            ))}
           </MessageScrollerContent>
         </MessageScrollerViewport>
         <MessageScrollerButton />
@@ -72,28 +81,32 @@ function TranscriptView({ question, answer }: TranscriptTurn) {
   );
 }
 
-function TranscriptQuery({ sessionId }: { sessionId: string }) {
+function TranscriptQuery({ sessionId, live }: { sessionId: string; live: boolean }) {
   const query = useQuery({
     queryKey: ["transcript", sessionId],
     queryFn: () => readTranscript(sessionId),
+    refetchInterval: live ? LIVE_REFRESH_MS : false,
+    // A session that was running when last opened may have grown since.
+    staleTime: live ? 0 : Number.POSITIVE_INFINITY,
   });
 
+  const empty = query.isError || (!!query.data && query.data.turns.length === 0);
   useEffect(() => {
     if (!hostEl || query.isPending) return;
-    hostEl.hidden = query.isError || !hasTurn(query.data);
-  }, [query.isPending, query.isError, query.data]);
+    hostEl.hidden = empty;
+  }, [query.isPending, empty]);
 
   if (query.isPending) {
     return <p className="hex-message-scroller-empty">读取对话…</p>;
   }
-  if (query.isError || !hasTurn(query.data)) return null;
-  return <TranscriptView question={query.data.question} answer={query.data.answer} />;
+  if (empty || !query.data) return null;
+  return <TranscriptView turns={query.data.turns} truncated={query.data.truncated} />;
 }
 
 let root: Root | null = null;
 let hostEl: HTMLElement | null = null;
 
-export function mountTranscript(host: HTMLElement, sessionId: string | null): void {
+export function mountTranscript(host: HTMLElement, sessionId: string | null, live = false): void {
   hostEl = host;
   root ??= createRoot(host);
   if (!sessionId) {
@@ -102,7 +115,8 @@ export function mountTranscript(host: HTMLElement, sessionId: string | null): vo
   }
   root.render(
     <QueryClientProvider client={queryClient}>
-      <TranscriptQuery sessionId={sessionId} />
+      {/* Keyed so switching sessions starts a fresh scroller at the latest question. */}
+      <TranscriptQuery key={sessionId} sessionId={sessionId} live={live} />
     </QueryClientProvider>,
   );
 }

@@ -149,8 +149,8 @@ function openMenu(hex: Hex, x: number, y: number): void {
       showDetails(details) {
         showDetails(details);
       },
-      showTranscript(sessionId) {
-        showTranscript(sessionId);
+      showTranscript(sessionId, live) {
+        showTranscript(sessionId, live);
       },
     });
   }
@@ -199,14 +199,14 @@ function showDetails(details: CellDetails): void {
   menuDetails.hidden = false;
 }
 
-function showTranscript(sessionId: string): void {
+function showTranscript(sessionId: string, live = false): void {
   if (!sessionId) {
     menuTranscript.hidden = true;
     mountTranscript(menuTranscript, null);
     return;
   }
   menuTranscript.hidden = false;
-  mountTranscript(menuTranscript, sessionId);
+  mountTranscript(menuTranscript, sessionId, live);
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {

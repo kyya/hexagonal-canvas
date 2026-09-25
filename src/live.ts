@@ -4,6 +4,8 @@ export type LiveSession = {
   title: string;
   cwd: string;
   live: boolean;
+  status: "busy" | "waiting" | "idle" | null;
+  waitingFor: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   model: string | null;

@@ -27,7 +27,8 @@ export type CellDetails = {
 
 export type CellMenu = {
   showDetails(details: CellDetails): void;
-  showTranscript(sessionId: string): void;
+  // `live` sessions keep refreshing while the menu is open.
+  showTranscript(sessionId: string, live?: boolean): void;
 };
 
 // A kind of hex content. Agent status is one kind; progress and quota can be added the same way.

@@ -1,28 +1,45 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { canvasSessions, sessionTranscript } from "./sessions.ts";
+import { snapshot, subscribe } from "./hub.ts";
+import { sessionTranscript } from "./sessions.ts";
 
 const app = new Hono();
 
-app.get("/api/sessions", (c) => c.json({ sessions: canvasSessions() }));
+app.get("/api/sessions", (c) => c.body(snapshot(), 200, { "content-type": "application/json" }));
 
 app.get("/api/transcript", (c) => {
   const transcript = sessionTranscript(c.req.query("id") ?? "");
-  if (!transcript) return c.json({ question: "", answer: "" }, 404);
+  if (!transcript) return c.json({ turns: [], truncated: false }, 404);
   return c.json(transcript);
 });
 
 app.get("/api/sessions/stream", (c) => {
   return streamSSE(c, async (stream) => {
-    let last = "";
-    while (true) {
-      const data = JSON.stringify({ sessions: canvasSessions() });
-      if (data !== last) {
-        await stream.writeSSE({ data });
-        last = data;
+    // Only the newest snapshot matters, so a slow client skips intermediate ones.
+    let pending: string | null = snapshot();
+    let wake: (() => void) | null = null;
+    const unsubscribe = subscribe((data) => {
+      pending = data;
+      wake?.();
+    });
+    let closed = false;
+    stream.onAbort(() => {
+      closed = true;
+      unsubscribe();
+      wake?.();
+    });
+    while (!closed) {
+      if (pending === null) {
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+        wake = null;
+        continue;
       }
-      await stream.sleep(1000);
+      const data: string = pending;
+      pending = null;
+      await stream.writeSSE({ data });
     }
   });
 });

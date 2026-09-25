@@ -4,6 +4,7 @@
 }
 
 .hex-message.is-user {
+  width: fit-content;
   margin-left: auto;
 }
 

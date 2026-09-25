@@ -10,6 +10,9 @@ export type AgentSession = {
   cwd: string;
   pid: number | null;
   since: string | null;
+  // Only agents that publish it (Claude Code's session registry) set these.
+  status?: "busy" | "idle" | "waiting";
+  waitingFor?: string;
 };
 
 type ProcessRow = {
@@ -53,7 +56,22 @@ function listProcesses(): ProcessRow[] {
   }
 }
 
+// A process's cwd hardly ever changes, and lsof is the slowest call in a scan: remember it briefly.
+const CWD_TTL_MS = 30_000;
+const cwdCache = new Map<number, { cwd: string; at: number }>();
+
 function cwdOf(pid: number): string {
+  const cached = cwdCache.get(pid);
+  if (cached && Date.now() - cached.at < CWD_TTL_MS) return cached.cwd;
+  const cwd = lookupCwd(pid);
+  cwdCache.set(pid, { cwd, at: Date.now() });
+  for (const [key, entry] of cwdCache) {
+    if (Date.now() - entry.at >= CWD_TTL_MS) cwdCache.delete(key);
+  }
+  return cwd;
+}
+
+function lookupCwd(pid: number): string {
   try {
     const output = execFileSync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], {
       encoding: "utf8",
@@ -173,7 +191,15 @@ function claudeSessions(): AgentSession[] {
   for (const name of names) {
     const record = readJson(join(dir, name));
     if (!record || typeof record !== "object") continue;
-    const row = record as { pid?: unknown; sessionId?: unknown; cwd?: unknown; startedAt?: unknown; name?: unknown };
+    const row = record as {
+      pid?: unknown;
+      sessionId?: unknown;
+      cwd?: unknown;
+      startedAt?: unknown;
+      name?: unknown;
+      status?: unknown;
+      waitingFor?: unknown;
+    };
     const pid = typeof row.pid === "number" ? row.pid : 0;
     const sessionId = text(row.sessionId);
     if (!sessionId || !pidAlive(pid)) continue;
@@ -185,6 +211,8 @@ function claudeSessions(): AgentSession[] {
       cwd,
       pid,
       since: typeof row.startedAt === "number" ? new Date(row.startedAt).toISOString() : null,
+      ...(row.status === "busy" || row.status === "idle" || row.status === "waiting" ? { status: row.status } : {}),
+      ...(row.status === "waiting" && text(row.waitingFor) ? { waitingFor: text(row.waitingFor) } : {}),
     });
   }
   return sessions;

@@ -6,7 +6,12 @@ import type { BoardCell, CellModule } from "./types";
 const ICON_SIZE = 48;
 // History sessions are drawn faded so the running ones stand out.
 const HISTORY_ALPHA = 0.38;
-const LIVE_DOT = "#22c55e";
+const IDLE_DOT = "#22c55e";
+const BUSY_ARC = "rgba(37, 99, 235, 0.85)";
+const WAITING = "#f59e0b";
+const SPIN_MS = 1100;
+const PULSE_MS = 1400;
+const BASE_TITLE = document.title;
 
 type AgentCell = BoardCell & { session: LiveSession };
 
@@ -36,7 +41,64 @@ function remember(layout: Layout): void {
   }));
   byPosition = new Map(cells.map((cell) => [`${cell.col},${cell.row}`, cell]));
   labels = layout.labels;
+  const waiting = layout.sessions.filter((session) => session.status === "waiting").length;
+  document.title = waiting > 0 ? `(${waiting}) 等你处理 · ${BASE_TITLE}` : BASE_TITLE;
 }
+
+// Busy and waiting cells animate; keep one animation frame queued while any of them is drawn.
+let animationFrame = 0;
+function keepAnimating(): void {
+  if (animationFrame !== 0) return;
+  animationFrame = requestAnimationFrame(() => {
+    animationFrame = 0;
+    frameRequest?.();
+  });
+}
+
+function drawBusy(ctx: CanvasRenderingContext2D, cx: number, cy: number, now: number): void {
+  const start = ((now % SPIN_MS) / SPIN_MS) * Math.PI * 2;
+  ctx.save();
+  ctx.strokeStyle = BUSY_ARC;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(cx, cy, ICON_SIZE / 2 + 7, start, start + Math.PI * 0.6);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawWaitingHalo(ctx: CanvasRenderingContext2D, cx: number, cy: number, now: number): void {
+  const pulse = (Math.sin(((now % PULSE_MS) / PULSE_MS) * Math.PI * 2) + 1) / 2;
+  ctx.save();
+  ctx.fillStyle = WAITING;
+  ctx.globalAlpha = 0.12 + pulse * 0.16;
+  ctx.beginPath();
+  ctx.arc(cx, cy, ICON_SIZE / 2 + 8 + pulse * 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBadge(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, status: string): void {
+  if (status === "waiting") {
+    const radius = 8 * scale;
+    ctx.fillStyle = WAITING;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = `700 ${Math.round(12 * scale)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("!", x, y + 0.5);
+    return;
+  }
+  ctx.fillStyle = status === "busy" ? BUSY_ARC : IDLE_DOT;
+  ctx.beginPath();
+  ctx.arc(x, y, 5 * scale, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+const STATUS_TEXT = { busy: "工作中", waiting: "等你处理", idle: "空闲" } as const;
 
 function find(cell: BoardCell): AgentCell | null {
   return byPosition.get(`${cell.col},${cell.row}`) ?? null;
@@ -74,18 +136,19 @@ export const agentStatus: CellModule = {
     const scale = popScale(`live:${agent.session.id}`, ready);
     if (!ready || scale === 0) return;
     const { ctx } = frame;
+    const { status } = agent.session;
     const x = frame.x + frame.width / 2 - ICON_SIZE / 2;
     const y = frame.midY - ICON_SIZE / 2;
+    const cx = x + ICON_SIZE / 2;
+    const now = performance.now();
+    if (status === "waiting") drawWaitingHalo(ctx, cx, frame.midY, now);
     ctx.save();
     if (!agent.session.live) ctx.globalAlpha = HISTORY_ALPHA;
     drawHexIcon(ctx, icon, x, y, ICON_SIZE, scale, () => frameRequest?.());
     ctx.restore();
-    if (agent.session.live) {
-      ctx.fillStyle = LIVE_DOT;
-      ctx.beginPath();
-      ctx.arc(x + ICON_SIZE - 2, y + 4, 5 * scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    if (status === "busy") drawBusy(ctx, cx, frame.midY, now);
+    if (status === "busy" || status === "waiting") keepAnimating();
+    if (agent.session.live) drawBadge(ctx, x + ICON_SIZE - 2, y + 4, scale, status ?? "idle");
   },
   overlay(frame) {
     const { ctx } = frame;
@@ -104,13 +167,15 @@ export const agentStatus: CellModule = {
     const agent = find(cell);
     if (!agent) return;
     const { session } = agent;
-    const status = session.live ? "运行中" : ago(session.updatedAt);
+    const state = session.status ? STATUS_TEXT[session.status] : session.live ? "运行中" : "";
+    const waitingFor = session.status === "waiting" && session.waitingFor ? `：${session.waitingFor}` : "";
+    const status = session.live ? `${state}${waitingFor}` : ago(session.updatedAt);
     menu.showDetails({
       title: session.title,
       subtitle: [session.agent, session.model, status, session.cwd].filter(Boolean).join(" · "),
       command: session.resume,
     });
-    menu.showTranscript(session.id);
+    menu.showTranscript(session.id, session.live);
   },
 };
 
