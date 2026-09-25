@@ -2,22 +2,31 @@
 // With E2E_SHOTS set, each test saves its verification screenshot.
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
-import { hexCentre, HEX_RADIUS, RECT_W } from "../harness.ts";
+import { hexCentre, HEX_RADIUS, OUTPUT_SCALE, RECT_W } from "../harness.ts";
+import { writeChatty, type Story } from "../fixtures/sessions.ts";
 import { eventually, geometry, startScene, VIEWPORT, type Scene } from "./scene.ts";
 
 describe("yields, search and map pins", () => {
   let scene: Scene;
 
+  let chatty: Story;
+
   before(async () => {
-    scene = await startScene();
+    scene = await startScene({
+      setup: (home) => {
+        chatty = writeChatty(home, 950, 1234, "聊了很久的会话");
+        return [chatty];
+      },
+    });
   });
 
   after(async () => {
     await scene?.close();
   });
 
-  // A teal pixel inside the yield pill, between the number (white) and the pill's left end.
-  const yieldPixel = async (id: string) => scene.pixel(id, -geometry.yieldFont * 0.45, geometry.yieldOffset);
+  // A teal pixel inside the yield pill: left of the number (white), below the icon it overlaps.
+  const yieldPixel = async (id: string) =>
+    scene.pixel(id, -geometry.yieldFont * 0.45, geometry.yieldOffset + geometry.yieldHeight * 0.3);
 
   const clusterShot = async (name: string) => {
     const { sessions } = await scene.layout();
@@ -104,10 +113,9 @@ describe("yields, search and map pins", () => {
     await form.locator(".hex-menu-input").press("Enter");
     await scene.page.locator("#hex-menu").waitFor({ state: "hidden" });
 
-    // The tack's head is drawn in rose red just above the hex centre (its middle has a white dot).
-    const head = geometry.iconSize / 2 / 1.618;
+    // The tack's head is drawn in rose red above the hex centre (its middle has a white dot).
     const tack = async () => {
-      const point = await scene.worldToCss(centre.x + head * 0.6, centre.y - head / 1.618);
+      const point = await scene.worldToCss(centre.x + geometry.pinHeadRadius * 0.6, centre.y + geometry.pinHeadY);
       return scene.pixelAtCss(point.cssX, point.cssY);
     };
     await eventually("the pin to be drawn", tack, (pixel) => pixel.alpha > 200 && pixel.rgb[0] > 200 && pixel.rgb[1] < 80);
@@ -142,6 +150,78 @@ describe("yields, search and map pins", () => {
     await form.locator(".hex-menu-delete").click();
     await eventually("the pin to be removed", tack, (pixel) => pixel.alpha < 50);
     assert.equal(await scene.page.evaluate(() => localStorage.getItem("hexagonal-canvas.pins")), "[]");
+  });
+
+  test("text safe zone: yield pills and pin notes never enter the band along the hex edges", async () => {
+    // Worst cases: every yield pill on, and a pin whose note is far wider than a cell.
+    await scene.page.evaluate(() => localStorage.setItem("hexagonal-canvas.toggle.yields", "1"));
+    const { sessions } = await scene.layout();
+    const rightmost = sessions.reduce((best, session) => (session.col > best.col ? session : best));
+    const pin = { col: rightmost.col + 2, row: rightmost.row };
+    await scene.page.evaluate(
+      (value) => localStorage.setItem("hexagonal-canvas.pins", JSON.stringify([value])),
+      // Full blocks ink their whole glyph box, so any overflow shows up in the band.
+      { ...pin, note: "████████████████████████" },
+    );
+    await scene.page.reload();
+    const claude = scene.story("history", "claude");
+    await eventually("yields to be drawn", () => yieldPixel(claude.id), (pixel) => pixel.alpha > 200);
+
+    // Hexes without a state tint: history sessions of several agents, and the pin.
+    const centres: { label: string; x: number; y: number }[] = [];
+    for (const agent of ["claude", "codex", "kimi", "gemini", "dsh"]) {
+      const cell = sessions.find((session) => session.id === scene.story("history", agent).id);
+      assert.ok(cell);
+      centres.push({ label: agent, ...hexCentre(cell.col, cell.row) });
+    }
+    // 1234 messages: the widest yield number the fixtures produce (shown as "1.2k").
+    const chattyCell = sessions.find((session) => session.id === chatty.id);
+    assert.ok(chattyCell && chattyCell.messages === 1234, "chatty fixture should report 1234 messages");
+    centres.push({ label: "1234 messages", ...hexCentre(chattyCell.col, chattyCell.row) });
+    centres.push({ label: "pin", ...hexCentre(pin.col, pin.row) });
+
+    const margin = HEX_RADIUS - geometry.safeApothem;
+    const cam = await scene.camera();
+    // Dense rings through the band, from just inside the edge stroke to just outside the safe line.
+    const points: { label: string; depth: number; x: number; y: number }[] = [];
+    for (const centre of centres) {
+      for (const depth of [0.3, 0.55, 0.8, 0.95]) {
+        const apothem = HEX_RADIUS - margin * depth;
+        const radius = apothem / Math.cos(Math.PI / 6);
+        const corners = [-90, -30, 30, 90, 150, 210].map((deg) => ({
+          x: centre.x + radius * Math.cos((deg * Math.PI) / 180),
+          y: centre.y + radius * Math.sin((deg * Math.PI) / 180),
+        }));
+        for (let edge = 0; edge < 6; edge++) {
+          const a = corners[edge];
+          const b = corners[(edge + 1) % 6];
+          if (!a || !b) continue;
+          for (let step = 1; step < 48; step++) {
+            const t = step / 48;
+            const wx = a.x + (b.x - a.x) * t;
+            const wy = a.y + (b.y - a.y) * t;
+            points.push({ label: centre.label, depth, x: Math.round((wx - cam.x) * cam.zoom * OUTPUT_SCALE), y: Math.round((wy - cam.y) * cam.zoom * OUTPUT_SCALE) });
+          }
+        }
+      }
+    }
+    const offenders = await scene.page.evaluate((list) => {
+      const ctx = document.querySelector<HTMLCanvasElement>("#app")?.getContext("2d");
+      if (!ctx) return ["no canvas"];
+      const found: string[] = [];
+      for (const point of list) {
+        const alpha = ctx.getImageData(point.x, point.y, 1, 1).data[3] ?? 0;
+        if (alpha >= 24) found.push(`${point.label} at ${Math.round(point.depth * 100)}% of the margin (alpha ${alpha})`);
+      }
+      return found;
+    }, points);
+    const checked = points.length;
+    assert.deepEqual(offenders.slice(0, 5), [], `${offenders.length} band pixels are drawn on`);
+    assert.ok(checked > 700, `sampled ${checked} band points`);
+    await scene.shot("safe-zone", await (async () => {
+      const at = await scene.worldToCss(centres[0]?.x ?? 0, centres[0]?.y ?? 0);
+      return { x: Math.max(0, at.cssX - 380), y: Math.max(0, at.cssY - 260), width: 900, height: 520 };
+    })());
   });
 
   test("no page errors", () => {

@@ -1,10 +1,12 @@
 // Draws map pins on the canvas and handles their menu (edit or remove the note).
 import { allPins, pinAt, removePin, setPin, subscribePins } from "../pins";
 import { pinMatches, searchQuery, subscribeSearch } from "../search";
-import { cellGeometry, PHI, phiFade } from "./golden";
+import { cellGeometry, PHI, phiFade, safeHalfWidth } from "./golden";
 import type { BoardCell, CellModule } from "./types";
 
 const PIN_COLOUR = "#e11d48";
+// Line box of the note, as a multiple of its font size (ascenders to descenders).
+const NOTE_LINE = 1.25;
 
 function cellsFromPins(): BoardCell[] {
   return allPins().map((pin) => ({ id: `pin:${pin.col},${pin.row}`, col: pin.col, row: pin.row }));
@@ -30,17 +32,17 @@ export const pinsModule: CellModule = {
     const { ctx } = frame;
     const g = cellGeometry(frame.width / 2);
     const cx = frame.x + frame.width / 2;
-    // A map tack: round head on a point, sized to the golden icon radius.
-    const head = g.iconSize / 2 / PHI;
-    const tipY = frame.midY + head * PHI;
-    const headY = frame.midY - head / PHI;
+    // A small map tack above the centre, leaving room for the note inside the text safe zone.
+    const head = g.pinHeadRadius;
+    const headY = frame.midY + g.pinHeadY;
+    const tipY = frame.midY + g.pinTipY;
     ctx.save();
     if (!pinMatches(pin, searchQuery())) ctx.globalAlpha = phiFade(2);
     ctx.fillStyle = PIN_COLOUR;
     ctx.beginPath();
     ctx.moveTo(cx, tipY);
-    ctx.lineTo(cx - head * 0.62, headY + head * 0.5);
-    ctx.lineTo(cx + head * 0.62, headY + head * 0.5);
+    ctx.lineTo(cx - head / PHI, headY + head / PHI);
+    ctx.lineTo(cx + head / PHI, headY + head / PHI);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
@@ -50,16 +52,18 @@ export const pinsModule: CellModule = {
     ctx.beginPath();
     ctx.arc(cx, headY, head / PHI ** 2, 0, Math.PI * 2);
     ctx.fill();
-    // The note, truncated, under the tack.
-    ctx.font = `600 ${g.yieldFont}px ui-sans-serif, system-ui, sans-serif`;
+    // The note, truncated to the widest line the text safe zone allows at its height.
+    ctx.font = `600 ${g.noteFont}px ui-sans-serif, system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "rgba(17, 24, 39, 0.78)";
-    const maxWidth = frame.width * (1 / PHI + 0.2);
+    const maxWidth = 2 * safeHalfWidth(g, g.noteOffset - g.noteFont * NOTE_LINE / 2, g.noteOffset + g.noteFont * NOTE_LINE / 2);
     let text = pin.note;
-    while (text.length > 1 && ctx.measureText(text).width > maxWidth) text = text.slice(0, -1);
-    if (text !== pin.note) text = `${text.slice(0, -1)}…`;
-    ctx.fillText(text, cx, frame.midY + g.yieldOffset);
+    if (ctx.measureText(text).width > maxWidth) {
+      while (text.length > 1 && ctx.measureText(`${text}…`).width > maxWidth) text = text.slice(0, -1);
+      text = `${text}…`;
+    }
+    ctx.fillText(text, cx, frame.midY + g.noteOffset);
     ctx.restore();
   },
   describe(cell) {

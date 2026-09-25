@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, PHI, phiFade, STRATEGIC_ZOOM } from "./golden.ts";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, insetOf, PHI, phiFade, safeHalfWidth, STRATEGIC_ZOOM } from "./golden.ts";
 
 // The canvas hex: side 64, so the apothem (inscribed radius, half the cell width) is 64·cos 30°.
 const APOTHEM = Math.cos(Math.PI / 6) * 64;
@@ -34,8 +34,8 @@ describe("cell geometry", () => {
     close(APOTHEM / (g.iconSize / 2), PHI ** 2, "apothem / icon radius");
   });
 
-  test("apothem : badge distance = φ : 1", () => {
-    close(APOTHEM / g.badgeDistance, PHI, "apothem / badge distance");
+  test("apothem : safe margin = φ³ : 1", () => {
+    close(APOTHEM / (APOTHEM - g.safeApothem), PHI ** 3, "apothem / safe margin");
   });
 
   test("icon radius : badge radius = φ² : 1", () => {
@@ -55,33 +55,77 @@ describe("cell geometry", () => {
     assert.ok(g.badgeAngle < 0 && g.badgeAngle > -Math.PI / 2, "badge must be in the top-right quadrant");
   });
 
-  test("badge clears the icon's centre area and stays inside the hex", () => {
-    const reach = g.badgeDistance + g.badgeRadius + g.badgeOutline;
-    assert.ok(reach < APOTHEM, `badge reaches ${reach}, hex apothem is ${APOTHEM}`);
-    assert.ok(g.badgeDistance > g.iconSize / 2, "badge centre must lie outside the icon's radius");
-  });
-
-  test("apothem : yield offset = φ : 1, icon radius : yield font = φ : 1", () => {
-    close(APOTHEM / g.yieldOffset, PHI, "apothem / yield offset");
+  test("icon radius : yield font = φ : 1, yield pill height = font · φ, pill rides the icon's bottom edge", () => {
     close(g.iconSize / 2 / g.yieldFont, PHI, "icon radius / yield font");
+    close(g.yieldHeight, g.yieldFont * PHI, "yield pill height");
+    close(g.yieldOffset, g.iconSize / 2, "yield offset = icon radius");
   });
 
   test("scales with the hex", () => {
     const double = cellGeometry(APOTHEM * 2);
-    for (const key of ["iconSize", "badgeDistance", "badgeRadius", "badgeOutline", "badgeGlyph", "yieldOffset", "yieldFont"] as const) {
-      close(double[key], g[key] * 2, `${key} at twice the size`);
-    }
+    const keys = ["iconSize", "safeApothem", "badgeDistance", "badgeRadius", "badgeOutline", "badgeGlyph", "yieldOffset", "yieldFont", "yieldHeight", "pinHeadRadius", "pinHeadY", "pinTipY", "noteOffset", "noteFont"] as const;
+    for (const key of keys) close(double[key], g[key] * 2, `${key} at twice the size`);
     close(double.badgeAngle, g.badgeAngle, "badge angle does not scale");
   });
 
   // Pixel snapshot at the canvas size (side 64): catches a change that keeps the ratios but moves the base.
-  const snapshot = { iconSize: 42.341, badgeDistance: 34.255, badgeRadius: 8.086, badgeOutline: 1.909, badgeGlyph: 9.995 };
+  const snapshot = {
+    iconSize: 42.341,
+    safeApothem: 42.341,
+    badgeDistance: 32.3605,
+    badgeRadius: 8.086,
+    badgeOutline: 1.909,
+    badgeGlyph: 9.995,
+    yieldOffset: 21.171,
+    yieldFont: 13.084,
+  };
   for (const [key, value] of Object.entries(snapshot)) {
     test(`${key} ≈ ${value}px`, () => close(g[key as keyof typeof snapshot], value, key, 0.0005));
   }
   test("badge angle ≈ -58.283°", () => close((g.badgeAngle * 180) / Math.PI, -58.283, "badge angle", 0.0005));
 });
 
+// Rule: text never crowds a hex edge. Everything that carries text lies inside the hex shrunk by
+// apothem / φ³ (≈ 13 px at the canvas size) on every side.
+describe("text safe zone", () => {
+  const g = cellGeometry(APOTHEM);
+  const margin = APOTHEM - g.safeApothem;
+
+  test("insetOf measures distance to the nearest edge", () => {
+    close(insetOf(APOTHEM, 0, 0), APOTHEM, "centre");
+    close(insetOf(APOTHEM, APOTHEM, 0), 0, "right edge");
+    close(insetOf(APOTHEM, 0, 64), APOTHEM - 64 * (Math.sqrt(3) / 2), "bottom vertex lies outside the inscribed circle");
+  });
+
+  test("the waiting badge (with its outline) stays a full margin from every edge", () => {
+    const x = Math.cos(g.badgeAngle) * g.badgeDistance;
+    const y = Math.sin(g.badgeAngle) * g.badgeDistance;
+    const clearance = insetOf(APOTHEM, x, y) - g.badgeRadius - g.badgeOutline;
+    assert.ok(clearance >= margin - EPSILON, `badge clears the edge by ${clearance}, needs ${margin}`);
+    assert.ok(g.badgeDistance > g.iconSize / 2, "badge centre lies outside the icon's radius");
+  });
+
+  test("the yield pill fits every compact count (up to four characters) inside the safe zone", () => {
+    const top = g.yieldOffset - g.yieldHeight / 2;
+    const bottom = g.yieldOffset + g.yieldHeight / 2;
+    const maxWidth = 2 * safeHalfWidth(g, top, bottom);
+    // Bold digits are at most ~0.62 em wide; the pill adds one font size of padding.
+    const widest = 4 * 0.62 * g.yieldFont + g.yieldFont;
+    assert.ok(widest <= maxWidth, `a four-character pill is ${widest} wide, the safe zone allows ${maxWidth}`);
+    for (const [x, y] of [[-maxWidth / 2, top], [maxWidth / 2, top], [-maxWidth / 2, bottom], [maxWidth / 2, bottom]]) {
+      assert.ok(insetOf(APOTHEM, x ?? 0, y ?? 0) >= margin - EPSILON, `pill corner (${x}, ${y}) crowds an edge`);
+    }
+  });
+
+  test("a pin note gets at least a few characters of width, and its widest line stays in the zone", () => {
+    const half = g.noteFont * 0.625;
+    const maxWidth = 2 * safeHalfWidth(g, g.noteOffset - half, g.noteOffset + half);
+    assert.ok(maxWidth >= 4 * g.noteFont, `note line only ${maxWidth} wide`);
+    assert.ok(insetOf(APOTHEM, maxWidth / 2, g.noteOffset + half) >= margin - EPSILON);
+    assert.ok(g.pinTipY < g.noteOffset - half, "the tack ends above the note");
+    assert.ok(insetOf(APOTHEM, 0, g.pinHeadY - g.pinHeadRadius) >= margin - EPSILON, "the tack head stays in the zone");
+  });
+});
 describe("state breathing", () => {
   // [min power, max power, period power]: opacity φ^-min … φ^-max, one breath per φ^period seconds.
   const expected: Record<keyof typeof BREATH, [number, number, number]> = {
