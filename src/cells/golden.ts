@@ -22,9 +22,6 @@ export type CellGeometry = {
   // Vertical foreshortening of the ground: 1 in the top-down view, φ⁻¹ fully tilted (see TILT).
   squash: number;
   iconSize: number;
-  // Screen offset of the icon centre: 0 top-down. Tilted, the upright icon stands with its bottom
-  // edge where the yield pill sits, so the pill still rides the icon's bottom edge.
-  iconY: number;
   // Apothem of the text safe zone: the hex shrunk by apothem / φ³ on every side.
   safeApothem: number;
   badgeDistance: number;
@@ -45,7 +42,7 @@ export type CellGeometry = {
 };
 
 // Positions are screen offsets from the cell centre. In the tilted view the hex is foreshortened by
-// `squash` while icons and text stay upright, so the badge is pushed out within the foreshortened
+// `squash`: icons lie on it and are foreshortened with it, while text stays upright, so the badge is pushed out within the foreshortened
 // safe zone, and text boxes are sized with safeHalfWidth (which reads `squash` from the geometry).
 export function cellGeometry(apothem: number, squash = 1): CellGeometry {
   const iconRadius = apothem / PHI ** 2;
@@ -60,7 +57,6 @@ export function cellGeometry(apothem: number, squash = 1): CellGeometry {
   return {
     squash,
     iconSize: iconRadius * 2,
-    iconY: iconRadius * (squash - 1),
     safeApothem,
     // Push the badge out along its diagonal until its outline touches the safe zone.
     badgeDistance: badgeDistanceWithin(safeApothem, badgeAngle, badgeRadius + badgeOutline, squash),
@@ -158,7 +154,7 @@ export const STRATEGIC_ZOOM = 1 / PHI;
 
 // Tilted view (Civ's default camera, key T): the ground is foreshortened to φ⁻¹ of its height
 // (cos θ = φ⁻¹, θ ≈ 51.8°), so a height h stands h · sin θ = h · φ^-½ tall on screen. Sessions rise
-// as hex prisms, icons and text stand upright on them. The camera tilts over φ⁻¹ s, and the tilt
+// as hex prisms; icons lie on their top faces, tilted with the ground, while text stands upright. The camera tilts over φ⁻¹ s, and the tilt
 // eases out as you zoom towards the strategic view, which is always flat.
 export const TILT = {
   squash: 1 / PHI,

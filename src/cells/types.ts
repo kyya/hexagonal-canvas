@@ -6,7 +6,8 @@ export type BoardCell = {
 
 // In the tilted view the canvas is foreshortened vertically by `squash` (1 when top-down), and x, y,
 // midY describe the top face of the cell's prism. Tints fill that face as before; anything that
-// should stand upright (icons, badges, text) is drawn inside `upright`.
+// lies on the face (icons) is drawn as usual and tilts with it; text (badges, numbers, notes) is
+// drawn inside `upright` so it stays readable.
 export type CellFrame = {
   ctx: CanvasRenderingContext2D;
   x: number;

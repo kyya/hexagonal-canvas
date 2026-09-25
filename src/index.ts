@@ -905,7 +905,7 @@ function render(): void {
     if (!ready || scale === 0) continue;
     const cx = x + hexRectangleWidth / 2;
     const cy = y + sideLength;
-    upright(cx, cy, () => drawHexIcon(ctx, icon, cx - iconSize / 2, cy - iconSize / 2, iconSize, scale, render));
+    drawHexIcon(ctx, icon, cx - iconSize / 2, cy - iconSize / 2, iconSize, scale, render);
   }
 
   // Tilted, prisms are drawn back to front (by row) so nearer ones stand in front.

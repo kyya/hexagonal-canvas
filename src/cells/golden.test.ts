@@ -221,11 +221,11 @@ describe("tilted view", () => {
   const margin = APOTHEM - t.safeApothem;
   const inZone = (x: number, y: number) => insetOf(APOTHEM, x, y, TILT.squash) >= margin - 1e-6;
 
-  test("geometry matches the top-down one except for the badge and icon placement", () => {
+  test("geometry matches the top-down one except for the badge placement", () => {
     const flat = cellGeometry(APOTHEM);
     for (const key of ["iconSize", "safeApothem", "badgeRadius", "badgeGlyph", "yieldFont", "yieldHeight", "noteFont"] as const) close(t[key], flat[key], key);
-    close(flat.iconY, 0, "top-down icon is centred");
-    close(t.iconY + t.iconSize / 2, t.yieldOffset * TILT.squash, "tilted icon stands on the yield pill's centre line");
+    // The icon lies on the face: its foreshortened bottom edge is where the upright pill is centred.
+    close((t.iconSize / 2) * TILT.squash, t.yieldOffset * TILT.squash, "pill rides the tilted icon's bottom edge");
   });
 
   test("the waiting badge disc stays inside the foreshortened safe zone", () => {
@@ -245,10 +245,13 @@ describe("tilted view", () => {
     assert.ok(edge, "badge should touch the safe zone");
   });
 
-  test("the badge follows the foreshortened golden diagonal and sits on the upright icon's rim", () => {
+  test("the badge follows the foreshortened golden diagonal, outside the foreshortened icon", () => {
     close(Math.tan(-t.badgeAngle), PHI * TILT.squash, "tan(tilted badge angle)");
-    const fromIcon = Math.hypot(Math.cos(t.badgeAngle) * t.badgeDistance, Math.sin(t.badgeAngle) * t.badgeDistance - t.iconY);
-    assert.ok(fromIcon > t.iconSize / 2 / PHI, `badge centre ${fromIcon} from the icon centre should be past its inner rim`);
+    const r = t.iconSize / 2;
+    const x = Math.cos(t.badgeAngle) * t.badgeDistance;
+    const y = Math.sin(t.badgeAngle) * t.badgeDistance;
+    const ellipse = (x / r) ** 2 + (y / (r * TILT.squash)) ** 2;
+    assert.ok(ellipse > 1, `badge centre should lie outside the icon's foreshortened disc, got ${ellipse}`);
   });
 
   test("the yield pill, upright at its foreshortened anchor, fits two characters at full size (longer counts shrink)", () => {

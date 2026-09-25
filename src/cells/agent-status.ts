@@ -208,12 +208,11 @@ export const agentStatus: CellModule = {
     const cx = frame.x + frame.width / 2;
     // The strategic view is flat colour: no icons, like Civ's 2D map.
     if (!strategic && icon && ready) {
-      frame.upright(cx, frame.midY, () => {
-        ctx.save();
-        if (!session.live) ctx.globalAlpha = FADES.history;
-        drawHexIcon(ctx, icon, cx - g.iconSize / 2, frame.midY + g.iconY - g.iconSize / 2, g.iconSize, scale, () => frameRequest?.());
-        ctx.restore();
-      });
+      // The icon lies on the top face, so tilted it is foreshortened with the ground.
+      ctx.save();
+      if (!session.live) ctx.globalAlpha = FADES.history;
+      drawHexIcon(ctx, icon, cx - g.iconSize / 2, frame.midY - g.iconSize / 2, g.iconSize, scale, () => frameRequest?.());
+      ctx.restore();
     }
     if (activeLens === "status" && fogged(session)) fillHex(ctx, frame, FOG_COLOUR, FOG.veil);
     frame.upright(cx, frame.midY, () => {

@@ -1,5 +1,6 @@
 // The tilted camera (Civ's default view): the ground is foreshortened, sessions stand as hex prisms
-// that rise with their message count, icons and badges stay upright, and picking hits the prism in
+// that rise with their message count, icons lie on (and tilt with) their tops while badges and text
+// stay upright, and picking hits the prism in
 // front. With E2E_SHOTS set, each test saves its verification screenshot.
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
@@ -97,7 +98,7 @@ describe("tilted view", () => {
     await scene.shot("f11-tilt-prisms", clip);
   });
 
-  test("tints fill the raised top, the badge stands upright, and the icon keeps its shape", async () => {
+  test("tints fill the raised top, the badge stands upright, and the icon tilts with the face", async () => {
     const waiting = scene.story("waiting");
     await eventually("the waiting tint on the raised top", () => scene.tint(waiting.id), (value) => value === "amber");
     const { squash } = await tilt();
@@ -107,8 +108,8 @@ describe("tilted view", () => {
     assert.equal(badge.alpha, 255, "the badge is solid");
     assert.ok(badge.rgb[0] > 200 && badge.rgb[2] < 80, `the badge is amber, got ${badge.rgb}`);
 
-    // Upright icons: the Claude glyph's ink is as tall as it is wide (not squashed to φ⁻¹). A live
-    // session's icon is drawn at full strength.
+    // The icon lies on the top face: the Claude glyph (as tall as it is wide top-down) is
+    // foreshortened to φ⁻¹ of its width. A live session's icon is drawn at full strength.
     const claude = scene.story("idle");
     const centre = await scene.cellPoint(claude.id);
     const box = await scene.page.evaluate(
@@ -132,7 +133,7 @@ describe("tilted view", () => {
     );
     assert.ok(box && box.width > 20, `found the icon ink, got ${JSON.stringify(box)}`);
     const aspect = box.height / box.width;
-    assert.ok(aspect > 0.85 && aspect < 1.15, `icon ink should keep its aspect upright, got ${aspect}`);
+    assert.ok(Math.abs(aspect - 1 / PHI) < 0.08, `icon ink should be foreshortened to φ⁻¹, got ${aspect}`);
   });
 
   test("pointing at a raised top picks that prism, not the ground behind it", async () => {
