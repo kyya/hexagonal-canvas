@@ -21,8 +21,13 @@ git-ignored):
 
 - `sheet.png` — the contact sheet: live states (idle / busy / waiting, animated ones as a frame strip),
   then a grid with one faded history cell per agent.
-- `<state>-<agent>-<frame>.png` — each crop on its own, for side-by-side or before/after comparisons.
+- `<state>-<agent>-<frame>.png` — each crop on its own (animated states keep every frame, static ones
+  only frame 1), for side-by-side or before/after comparisons.
 - `manifest.json` — which session, cell (col,row) and files belong to each story.
+
+Live states (idle / busy / waiting) are always rendered with the Claude icon: Claude Code is the only
+agent that publishes a status the fixture can fake. Other agents appear in the history grid only, so
+when the user asks about a specific agent's live look, say that up front.
 
 Options: `--agents claude,codex` (limit the history row), `--zoom 3` (bigger crops),
 `--frames 6 --interval 200` (finer animation strip), `--keep` (keep the fixture HOME to inspect it).

@@ -251,6 +251,8 @@ async function main(): Promise<void> {
     mkdirSync(options.out, { recursive: true });
     const manifest = crops.map((crop) => {
       const name = `${crop.story.state}-${crop.story.agent}`;
+      // Only animated states need every frame; static ones keep the first.
+      if (crop.story.state !== "busy" && crop.story.state !== "waiting") crop.frames = crop.frames.slice(0, 1);
       crop.frames.forEach((frame, i) => writeFileSync(join(options.out, `${name}-${i + 1}.png`), Buffer.from(frame, "base64")));
       return {
         id: crop.story.id,
