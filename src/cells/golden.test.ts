@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
-import { cellGeometry, FADES, MOTION, PHI, phiFade } from "./golden.ts";
+import { BREATH, breathAlpha, cellGeometry, FADES, PHI, phiFade } from "./golden.ts";
 
 // The canvas hex: side 64, so the apothem (inscribed radius, half the cell width) is 64·cos 30°.
 const APOTHEM = Math.cos(Math.PI / 6) * 64;
@@ -27,98 +27,67 @@ describe("φ", () => {
   });
 });
 
-describe("cell geometry ratios", () => {
+describe("cell geometry", () => {
   const g = cellGeometry(APOTHEM);
-  const iconRadius = g.iconSize / 2;
 
-  test("apothem : ring : icon radius = φ² : φ : 1", () => {
-    close(APOTHEM / g.ringRadius, PHI, "apothem / ring");
-    close(g.ringRadius / iconRadius, PHI, "ring / icon radius");
-    close(APOTHEM / iconRadius, PHI ** 2, "apothem / icon radius");
+  test("apothem : icon radius = φ² : 1", () => {
+    close(APOTHEM / (g.iconSize / 2), PHI ** 2, "apothem / icon radius");
   });
 
-  test("icon radius : badge radius = φ² : 1", () => {
-    close(iconRadius / g.badgeRadius, PHI ** 2, "icon radius / badge radius");
+  test("scales with the hex", () => {
+    close(cellGeometry(APOTHEM * 2).iconSize, g.iconSize * 2, "icon size at twice the size");
   });
 
-  test("badge radius : ring stroke = φ² : 1", () => {
-    close(g.badgeRadius / g.ringWidth, PHI ** 2, "badge radius / ring stroke");
-  });
-
-  test("ring stroke : badge outline = φ : 1", () => {
-    close(g.ringWidth / g.badgeOutline, PHI, "ring stroke / badge outline");
-  });
-
-  test("badge sits on the golden-rectangle diagonal (rise : run = φ : 1), top-right", () => {
-    close(Math.tan(-g.badgeAngle), PHI, "tan(badge angle)");
-    assert.ok(g.badgeAngle < 0 && g.badgeAngle > -Math.PI / 2, "badge must be in the top-right quadrant");
-  });
-
-  test("badge glyph is the golden section of the badge diameter", () => {
-    close((g.badgeRadius * 2) / g.badgeGlyph, PHI, "badge diameter / glyph");
-  });
-
-  test("everything scales with the hex", () => {
-    const double = cellGeometry(APOTHEM * 2);
-    for (const key of ["iconSize", "ringRadius", "ringWidth", "badgeRadius", "badgeOutline", "badgeGlyph"] as const) {
-      close(double[key], g[key] * 2, `${key} at twice the size`);
-    }
-    close(double.badgeAngle, g.badgeAngle, "badge angle does not scale");
-  });
-
-  test("ring, badge and its outline stay inside the hex", () => {
-    const badgeReach = g.ringRadius + g.badgeRadius + g.badgeOutline;
-    assert.ok(badgeReach < APOTHEM, `badge reaches ${badgeReach}, hex apothem is ${APOTHEM}`);
-    assert.ok(g.ringRadius + g.ringWidth / 2 < APOTHEM, "ring must stay inside the hex");
-    assert.ok(iconRadius + g.ringWidth / 2 < g.ringRadius, "ring must clear the icon");
+  test("icon ≈ 42.341px at the canvas size (side 64)", () => {
+    // Pixel snapshot: catches a change that keeps the ratio but moves the base.
+    close(g.iconSize, 42.341, "iconSize", 0.0005);
   });
 });
 
-describe("cell geometry at the canvas size (side 64)", () => {
-  // Pixel snapshot: catches any change, even one that keeps the ratios but moves the base.
-  const g = cellGeometry(APOTHEM);
-  const expected = {
-    iconSize: 42.341,
-    ringRadius: 34.255,
-    ringWidth: 3.089,
-    badgeRadius: 8.086,
-    badgeOutline: 1.909,
-    badgeGlyph: 9.995,
+describe("state breathing", () => {
+  // [min power, max power, period power]: opacity φ^-min … φ^-max, one breath per φ^period seconds.
+  const expected: Record<keyof typeof BREATH, [number, number, number]> = {
+    idle: [5, 5, 1],
+    busy: [5, 3, 1],
+    waiting: [4, 2, 2],
   };
-  for (const [key, value] of Object.entries(expected)) {
-    test(`${key} ≈ ${value}px`, () => close(g[key as keyof typeof expected], value, key, 0.0005));
+  for (const [state, [minPower, maxPower, periodPower]] of Object.entries(expected)) {
+    const breath = BREATH[state as keyof typeof BREATH];
+    test(`${state}: tint φ⁻${minPower} … φ⁻${maxPower}, one breath per φ^${periodPower} s`, () => {
+      close(breath.min, PHI ** -minPower, `${state} min`);
+      close(breath.max, PHI ** -maxPower, `${state} max`);
+      close(breath.periodMs, 1000 * PHI ** periodPower, `${state} period`);
+    });
   }
-  test("badge angle ≈ -58.283°", () => close((g.badgeAngle * 180) / Math.PI, -58.283, "badge angle", 0.0005));
-});
 
-describe("motion", () => {
-  test("spinner turns once per φ seconds and stretches every φ² seconds", () => {
-    close(MOTION.spinMs, 1000 * PHI, "spinMs");
-    close(MOTION.stretchMs, 1000 * PHI ** 2, "stretchMs");
+  test("idle is still; busy and waiting breathe", () => {
+    assert.equal(BREATH.idle.min, BREATH.idle.max);
+    assert.ok(BREATH.busy.max > BREATH.busy.min);
+    assert.ok(BREATH.waiting.max > BREATH.waiting.min);
   });
 
-  test("spinner arc stretches between 2π/φ³ and 2π/φ", () => {
-    close(MOTION.arcMin, (2 * Math.PI) / PHI ** 3, "arcMin");
-    close(MOTION.arcMax, (2 * Math.PI) / PHI, "arcMax");
+  test("waiting is the loudest state: deepest tint and deepest breath", () => {
+    assert.ok(BREATH.waiting.max > BREATH.busy.max && BREATH.busy.max > BREATH.idle.max);
+    assert.ok(BREATH.waiting.max - BREATH.waiting.min > BREATH.busy.max - BREATH.busy.min);
   });
 
-  test("waiting breathes once per φ seconds", () => {
-    close(MOTION.pulseMs, 1000 * PHI, "pulseMs");
+  test("tints stay soft: never above φ⁻²", () => {
+    for (const [state, breath] of Object.entries(BREATH)) {
+      assert.ok(breath.max <= phiFade(2) + EPSILON, `${state} tint peaks at ${breath.max}`);
+    }
+  });
+
+  test("breathAlpha eases from min to max and back over one period", () => {
+    const { min, max, periodMs } = BREATH.waiting;
+    close(breathAlpha(BREATH.waiting, 0), min, "start of breath");
+    close(breathAlpha(BREATH.waiting, periodMs / 2), max, "middle of breath");
+    close(breathAlpha(BREATH.waiting, periodMs), min, "end of breath");
+    close(breathAlpha(BREATH.idle, 1234), BREATH.idle.min, "idle never changes");
   });
 });
 
 describe("fades", () => {
-  const expected: Record<keyof typeof FADES, number> = {
-    history: 2,
-    busyTrack: 4,
-    idleTrack: 3,
-    waitingFillMin: 4,
-    waitingFillMax: 2,
-    waitingRingMin: 1,
-  };
-  for (const [key, power] of Object.entries(expected)) {
-    test(`${key} = φ⁻${power}`, () => close(FADES[key as keyof typeof FADES], PHI ** -power, key));
-  }
+  test("history = φ⁻²", () => close(FADES.history, phiFade(2), "history"));
 });
 
 // Guard against bypassing ./golden: the drawing code must take every size, timing and fade from it.

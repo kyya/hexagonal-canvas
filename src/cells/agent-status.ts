@@ -1,17 +1,12 @@
 import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { connectLiveSessions, type Layout, type LiveSession, type ProjectLabel } from "../live";
 import { armPop, popScale } from "./pop";
-import { cellGeometry, FADES, MOTION, type CellGeometry } from "./golden";
+import { BREATH, breathAlpha, cellGeometry, FADES } from "./golden";
 import type { BoardCell, CellFrame, CellModule } from "./types";
 
 // Every size, timing and opacity comes from ./golden (golden ratio, locked by golden.test.ts);
-// only colours live here.
-const IDLE = "#22c55e";
-const BUSY = "#2563eb";
-const WAITING = "#f59e0b";
-// Waiting fills its whole hex with a breathing tint behind the icon.
-const WAITING_FILL = "#f59e0b";
-const WAITING_RING = true;
+// only colours live here. A live session's state is a soft tint filling its hex, breathing.
+const TINT = { idle: "#22c55e", busy: "#2563eb", waiting: "#f59e0b" } as const;
 const BASE_TITLE = document.title;
 
 type AgentCell = BoardCell & { session: LiveSession };
@@ -56,28 +51,6 @@ function keepAnimating(): void {
   });
 }
 
-function ring(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, from = 0, to = Math.PI * 2): void {
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, from, to);
-  ctx.stroke();
-}
-
-function drawBusy(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number, now: number): void {
-  const radius = g.ringRadius * scale;
-  ctx.save();
-  ctx.lineWidth = g.ringWidth * scale;
-  ctx.lineCap = "round";
-  // Faint track so the moving arc reads as progress around a ring, not a stray stroke.
-  ctx.strokeStyle = `rgba(37, 99, 235, ${FADES.busyTrack})`;
-  ring(ctx, cx, cy, radius);
-  const stretch = (1 - Math.cos(((now % MOTION.stretchMs) / MOTION.stretchMs) * Math.PI * 2)) / 2;
-  const length = MOTION.arcMin + (MOTION.arcMax - MOTION.arcMin) * stretch;
-  const head = ((now % MOTION.spinMs) / MOTION.spinMs) * Math.PI * 2 - Math.PI / 2;
-  ctx.strokeStyle = BUSY;
-  ring(ctx, cx, cy, radius, head - length, head);
-  ctx.restore();
-}
-
 function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, side: number): void {
   const rise = side / 2;
   ctx.beginPath();
@@ -90,68 +63,13 @@ function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: num
   ctx.closePath();
 }
 
-function breathOf(now: number): number {
-  return (1 - Math.cos(((now % MOTION.pulseMs) / MOTION.pulseMs) * Math.PI * 2)) / 2;
-}
-
-// Drawn under the icon: the hex fills with a tint breathing between φ⁻⁴ and φ⁻² opacity.
-function drawWaitingFill(ctx: CanvasRenderingContext2D, frame: CellFrame, now: number): void {
+// Drawn under the icon: the whole hex takes the state's colour at its breathing opacity.
+function drawStateTint(ctx: CanvasRenderingContext2D, frame: CellFrame, state: keyof typeof TINT, now: number): void {
   ctx.save();
-  ctx.fillStyle = WAITING_FILL;
-  ctx.globalAlpha = FADES.waitingFillMin + (FADES.waitingFillMax - FADES.waitingFillMin) * breathOf(now);
+  ctx.fillStyle = TINT[state];
+  ctx.globalAlpha = breathAlpha(BREATH[state], now);
   hexPath(ctx, frame.x, frame.y, frame.width, frame.midY - frame.y);
   ctx.fill();
-  ctx.restore();
-}
-
-// Drawn over the icon: the ring breathes between φ⁻¹ and full opacity, in step with the fill.
-function drawWaiting(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number, now: number): void {
-  if (!WAITING_RING) return;
-  ctx.save();
-  ctx.strokeStyle = WAITING;
-  ctx.globalAlpha = FADES.waitingRingMin + (1 - FADES.waitingRingMin) * breathOf(now);
-  ctx.lineWidth = g.ringWidth * scale;
-  ring(ctx, cx, cy, g.ringRadius * scale);
-  ctx.restore();
-}
-
-// Idle keeps a quiet track so every live cell shares the ring and its badge never floats alone.
-function drawIdle(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number): void {
-  ctx.save();
-  ctx.lineWidth = g.ringWidth * scale;
-  ctx.strokeStyle = `rgba(34, 197, 94, ${FADES.idleTrack})`;
-  ring(ctx, cx, cy, g.ringRadius * scale);
-  ctx.restore();
-}
-
-function drawBadge(
-  ctx: CanvasRenderingContext2D,
-  g: CellGeometry,
-  cx: number,
-  cy: number,
-  scale: number,
-  status: "idle" | "waiting",
-): void {
-  const x = cx + Math.cos(g.badgeAngle) * g.ringRadius * scale;
-  const y = cy + Math.sin(g.badgeAngle) * g.ringRadius * scale;
-  const radius = g.badgeRadius * scale;
-  ctx.save();
-  // A white outline separates the badge from the ring and whatever the icon draws underneath.
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(x, y, radius + g.badgeOutline * scale, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = status === "waiting" ? WAITING : IDLE;
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-  if (status === "waiting") {
-    ctx.fillStyle = "#fff";
-    ctx.font = `800 ${Math.round(g.badgeGlyph * scale)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("!", x, y + 0.5 * scale);
-  }
   ctx.restore();
 }
 
@@ -197,21 +115,16 @@ export const agentStatus: CellModule = {
     const g = cellGeometry(frame.width / 2);
     const x = frame.x + frame.width / 2 - g.iconSize / 2;
     const y = frame.midY - g.iconSize / 2;
-    const cx = x + g.iconSize / 2;
-    const cy = frame.midY;
-    const now = performance.now();
-    if (agent.session.live && status === "waiting") drawWaitingFill(ctx, frame, now);
+    const state = agent.session.live ? (status ?? "idle") : null;
+    if (state) {
+      drawStateTint(ctx, frame, state, performance.now());
+      const { min, max } = BREATH[state];
+      if (max > min) keepAnimating();
+    }
     ctx.save();
     if (!agent.session.live) ctx.globalAlpha = FADES.history;
     drawHexIcon(ctx, icon, x, y, g.iconSize, scale, () => frameRequest?.());
     ctx.restore();
-    if (!agent.session.live) return;
-    if (status === "idle" || !status) drawIdle(ctx, g, cx, cy, scale);
-    if (status === "busy") drawBusy(ctx, g, cx, cy, scale, now);
-    if (status === "waiting") drawWaiting(ctx, g, cx, cy, scale, now);
-    if (status === "busy" || status === "waiting") keepAnimating();
-    // Busy needs no badge: the spinner is the indicator, and a badge would sit in its path.
-    if (status !== "busy") drawBadge(ctx, g, cx, cy, scale, status === "waiting" ? "waiting" : "idle");
   },
   overlay(frame) {
     const { ctx } = frame;

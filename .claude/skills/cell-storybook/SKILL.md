@@ -1,6 +1,6 @@
 ---
 name: cell-storybook
-description: Render storybook-style contact sheets of single hex cells on the Hexagonal Canvas — every visual state (history/faded, live idle, busy spinner, waiting ring) with animation frames, plus one faded cell per agent icon. Use this whenever the user wants to see, screenshot, compare or review how a hex/格子 looks, asks for 单个格子截图 / 各种状态截图 / storybook / 组件图 / 视觉回归, or after any change to cell drawing (src/cells/*, src/icons.ts, status colours, icon sizes, animations) so the result can be checked before and after — even if they only say "拍出来我看看" or "截个图看看效果".
+description: Render storybook-style contact sheets of single hex cells on the Hexagonal Canvas — every visual state (history/faded, live idle / busy / waiting as breathing hex tints) with animation frames, plus one faded cell per agent icon. Use this whenever the user wants to see, screenshot, compare or review how a hex/格子 looks, asks for 单个格子截图 / 各种状态截图 / storybook / 组件图 / 视觉回归, or after any change to cell drawing (src/cells/*, src/icons.ts, status tints, icon sizes, breathing) so the result can be checked before and after — even if they only say "拍出来我看看" or "截个图看看效果".
 ---
 
 # Cell storybook
@@ -25,7 +25,7 @@ git-ignored):
   only frame 1), for side-by-side or before/after comparisons.
 
 Every crop is cut out as a hexagon with transparent corners. A cell's rectangular bounding box
-overlaps its six neighbours, so a plain rectangle would show slices of their rings and icons and make
+overlaps its six neighbours, so a plain rectangle would show slices of their tints and icons and make
 a clean cell look broken. When you build your own comparison page from the crops, keep them as they
 are (don't re-crop to a rectangle) and put them on a light background so the hex silhouette reads.
 - `manifest.json` — which session, cell (col,row) and files belong to each story.
@@ -48,8 +48,9 @@ Send `sheet.png` to the user (SendUserFile with `display: "render"` when availab
 you see state by state. The point of the sheet is to look closely, so actually read the image and call
 out problems you notice, for example:
 
-- elements that collide (a badge sitting on the spinner arc, a ring or fill running past the hex edge);
-- states that are too faint or too similar to tell apart at normal zoom;
+- states that are too faint or too similar to tell apart at normal zoom, or a breath too shallow to
+  notice across the frame strip;
+- a tint running past the hex edge, or anything drawn over the icon;
 - **an empty hex in the history grid means that agent has no icon mapping** in `src/icons.ts`
   (`AGENT_SLUG`), even though its sessions are discovered;
 - a story listed as missing in the script output means the server did not report that session —

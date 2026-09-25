@@ -1,66 +1,49 @@
 // Every proportion inside a cell derives from the golden ratio, measured from the hex's apothem
 // (the radius of its inscribed circle, half the cell's width):
 //
-//   apothem : status ring : icon radius   =  φ² : φ : 1
-//   icon radius : badge radius            =  φ² : 1
-//   badge radius : ring stroke            =  φ² : 1
-//   ring stroke : badge outline           =  φ  : 1
+//   apothem : icon radius  =  φ² : 1
 //
-// The badge sits where the ring meets the diagonal of a golden rectangle (rise : run = φ : 1),
-// timings are multiples of φ seconds and fades are negative powers of φ.
+// A session's state is not drawn as a ring or badge but as a soft tint filling the hex. The tints
+// breathe with periods that are powers of φ seconds, and every opacity is a negative power of φ.
 export const PHI = (1 + Math.sqrt(5)) / 2;
 
 export type CellGeometry = {
   iconSize: number;
-  ringRadius: number;
-  ringWidth: number;
-  badgeRadius: number;
-  badgeOutline: number;
-  badgeAngle: number;
-  // Font size of the glyph inside the badge ("!"): the golden section of the badge's diameter.
-  badgeGlyph: number;
 };
 
 export function cellGeometry(apothem: number): CellGeometry {
-  const ringRadius = apothem / PHI;
-  const iconRadius = ringRadius / PHI;
-  const badgeRadius = iconRadius / PHI ** 2;
-  const ringWidth = badgeRadius / PHI ** 2;
-  return {
-    iconSize: iconRadius * 2,
-    ringRadius,
-    ringWidth,
-    badgeRadius,
-    badgeOutline: ringWidth / PHI,
-    badgeAngle: -Math.atan(PHI),
-    badgeGlyph: (badgeRadius * 2) / PHI,
-  };
+  return { iconSize: (apothem / PHI ** 2) * 2 };
 }
 
-// φ^-n: 0.618, 0.382, 0.236, 0.146 …
+// φ^-n: 0.618, 0.382, 0.236, 0.146, 0.090 …
 export function phiFade(n: number): number {
   return PHI ** -n;
 }
 
-// Animation timing: multiples of φ seconds.
-export const MOTION = {
-  // Busy spinner: one turn per φ s; the arc stretches between 2π/φ³ and 2π/φ every φ² s.
-  spinMs: 1000 * PHI,
-  stretchMs: 1000 * PHI ** 2,
-  arcMin: (Math.PI * 2) / PHI ** 3,
-  arcMax: (Math.PI * 2) / PHI,
-  // Waiting: fill and ring breathe once per φ s.
-  pulseMs: 1000 * PHI,
-} as const;
+export type Breath = {
+  // Opacity of the hex tint at the bottom and top of a breath; equal values mean no breathing.
+  min: number;
+  max: number;
+  // One full breath, in milliseconds.
+  periodMs: number;
+};
+
+// Each state has its own colour, depth and rhythm, so they can be told apart at a glance:
+// idle is still, busy breathes shallow and quick, waiting breathes deep and slow.
+export const BREATH = {
+  idle: { min: phiFade(5), max: phiFade(5), periodMs: 1000 * PHI },
+  busy: { min: phiFade(5), max: phiFade(3), periodMs: 1000 * PHI },
+  waiting: { min: phiFade(4), max: phiFade(2), periodMs: 1000 * PHI ** 2 },
+} as const satisfies Record<string, Breath>;
 
 // Opacities: negative powers of φ.
 export const FADES = {
   // History sessions are faded so running ones stand out.
   history: phiFade(2),
-  busyTrack: phiFade(4),
-  idleTrack: phiFade(3),
-  // Waiting fill breathes between these, the ring between waitingRingMin and 1.
-  waitingFillMin: phiFade(4),
-  waitingFillMax: phiFade(2),
-  waitingRingMin: phiFade(1),
 } as const;
+
+// Tint opacity of a breath at time `now`: a cosine ease from min up to max and back.
+export function breathAlpha(breath: Breath, now: number): number {
+  const phase = (now % breath.periodMs) / breath.periodMs;
+  return breath.min + (breath.max - breath.min) * ((1 - Math.cos(phase * Math.PI * 2)) / 2);
+}
