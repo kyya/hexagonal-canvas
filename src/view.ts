@@ -10,6 +10,8 @@ export type View = {
   centreOn(x: number, y: number): void;
   hexCentre(col: number, row: number): { x: number; y: number };
   requestRender(): void;
+  // Called after every canvas render (camera moves, zoom, animation), e.g. to redraw the minimap.
+  onRender(listener: () => void): void;
 };
 
 let current: View | null = null;

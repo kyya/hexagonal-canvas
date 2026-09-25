@@ -19,6 +19,7 @@ export type CanvasSession = {
   createdAt: string | null;
   updatedAt: string | null;
   model: string | null;
+  messages: number;
   resume: string | null;
 };
 
@@ -56,6 +57,7 @@ function fromHistory(session: HistorySession, live: AgentSession | undefined): C
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     model: session.model,
+    messages: session.messages,
     resume: session.resume,
   };
 }
@@ -72,6 +74,7 @@ function fromLive(session: AgentSession): CanvasSession {
     createdAt: session.since,
     updatedAt: null,
     model: null,
+    messages: 0,
     resume: null,
   };
 }

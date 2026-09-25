@@ -33,7 +33,9 @@ export const HISTORY_AGENTS = [
   "dsh",
 ] as const;
 
-const BASE = Date.parse("2026-09-01T10:00:00.000Z");
+// A week ago, so fixtures stay "recent" whenever the tests run (fog of war starts at 30 days).
+const DAY = 86_400_000;
+const BASE = Math.floor((Date.now() - 7 * DAY) / DAY) * DAY + 10 * 3_600_000;
 
 function write(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
@@ -286,4 +288,11 @@ export function registerLiveAs(home: string, story: Story, pid: number, state: L
   const live = { ...story, state, waitingFor };
   registerLive(home, live, pid);
   return live;
+}
+
+// A Claude session last touched `daysAgo` days ago (fog of war covers old ones).
+export function writeAged(home: string, n: number, daysAgo: number, prompt: string): Story {
+  const id = uuid(n);
+  claudeLike(home, ".claude", id, Date.now() - daysAgo * DAY, prompt, "claude-opus-5-5");
+  return { id: `claude:${id}`, agent: "claude", state: "history", label: prompt };
 }

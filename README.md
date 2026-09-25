@@ -44,6 +44,14 @@ command and the whole conversation.
   its name, session count, running (green) and waiting (amber) counts. Click a banner to fly there.
 - **Tooltip**: rest the pointer on a cell for its title, agent, model and state.
 
+### Views
+
+- **Lenses** (top-left, keys `1`–`5`): recolour the map by state (default), recency, agent, model or
+  message count, with a legend for each. The choice is remembered.
+- **Strategic view**: zoom out past φ⁻¹ and cells become flat colour blocks without icons, like
+  Civ's 2D map; the **minimap** (bottom-left) shows everything and moves the camera on click or drag.
+- **Fog of war**: history sessions untouched for 30 days are veiled in grey (state lens).
+
 Sessions are read-only from each agent's own files, following the adapters of
 [Wake](https://github.com/iAmCorey/Wake) (MIT):
 

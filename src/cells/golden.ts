@@ -67,3 +67,12 @@ export function breathAlpha(breath: Breath, now: number): number {
   const phase = (now % breath.periodMs) / breath.periodMs;
   return breath.min + (breath.max - breath.min) * ((1 - Math.cos(phase * Math.PI * 2)) / 2);
 }
+
+// Fog of war: history sessions untouched this long are veiled at φ⁻¹, like unexplored land.
+export const FOG = {
+  afterDays: 30,
+  veil: phiFade(1),
+} as const;
+
+// Strategic view (Civ's 2D map): below zoom φ⁻¹, cells become flat colour and icons are dropped.
+export const STRATEGIC_ZOOM = 1 / PHI;

@@ -9,6 +9,7 @@ export type LiveSession = {
   createdAt: string | null;
   updatedAt: string | null;
   model: string | null;
+  messages: number;
   resume: string | null;
   col: number;
   row: number;
