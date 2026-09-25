@@ -225,3 +225,118 @@
 .hud-waiting-bar button:focus:not(:focus-visible) {
   outline: none;
 }
+
+.hud-lens-toggle {
+  margin-left: 4px;
+  padding: 4px 12px;
+  border: 0;
+  border-left: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.6);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud-lens-toggle[aria-pressed="true"] {
+  background: #0891b2;
+  color: #fff;
+}
+
+.hud-search-open {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  padding: 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.6);
+  font: 12px/1.4 ui-sans-serif, system-ui, sans-serif;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+
+.hud-search-open[hidden],
+.hud-search[hidden] {
+  display: none;
+}
+
+.hud-search-open kbd {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.hud-search {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 4;
+  width: min(520px, calc(100vw - 32px));
+  padding: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  transform: translateX(-50%);
+}
+
+.hud-search-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.hud-search-count {
+  padding: 6px 4px 2px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.hud-search-count:empty {
+  display: none;
+}
+
+.hud-search-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-search-item {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hud-search-item[aria-selected="true"],
+.hud-search-item:hover {
+  background: rgba(8, 145, 178, 0.1);
+}
+
+.hud-search-item-title {
+  overflow: hidden;
+  color: rgba(0, 0, 0, 0.85);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-search-item-meta {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}

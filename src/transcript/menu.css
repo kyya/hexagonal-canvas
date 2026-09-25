@@ -80,3 +80,50 @@
   font-size: 11px;
   text-align: center;
 }
+
+.hex-menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.hex-menu-form[hidden] {
+  display: none;
+}
+
+.hex-menu-input {
+  padding: 6px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.hex-menu-input:focus {
+  border-color: #e11d48;
+}
+
+.hex-menu-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.hex-menu-actions button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hex-menu-submit {
+  background: #e11d48;
+  color: #fff;
+}
+
+.hex-menu-delete {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.7);
+}

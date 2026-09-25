@@ -2,7 +2,9 @@ import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { subscribeLayout, type Layout, type LiveSession } from "../live";
 import { armPop, popScale } from "./pop";
 import { fogged, lens, lensTint, subscribeLens } from "../lens";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, phiFade, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
+import { searchQuery, sessionMatches, subscribeSearch } from "../search";
+import { isOn, subscribeToggles } from "../toggles";
+import { BREATH, breathAlpha, cellGeometry, FADES, FOG, PHI, phiFade, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
 import { projectHue } from "./palette";
 import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 
@@ -11,6 +13,8 @@ import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 const TINT = { idle: "#22c55e", busy: "#2563eb", waiting: "#f59e0b" } as const;
 const BADGE = "#f59e0b";
 const FOG_COLOUR = "#f3f4f6";
+const SEARCH_VEIL = "#ffffff";
+const YIELD_BACKGROUND = "rgba(8, 145, 178, 0.9)";
 const BASE_TITLE = document.title;
 
 type AgentCell = BoardCell & { session: LiveSession };
@@ -91,6 +95,26 @@ function drawStatusBackground(ctx: CanvasRenderingContext2D, frame: CellFrame, s
   }
 }
 
+// Civ-style yield under the icon: the session's message count, in a small pill.
+function drawYield(ctx: CanvasRenderingContext2D, g: CellGeometry, frame: CellFrame, messages: number): void {
+  const text = String(messages);
+  const cx = frame.x + frame.width / 2;
+  const cy = frame.midY + g.yieldOffset;
+  ctx.save();
+  ctx.font = `700 ${g.yieldFont}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const width = ctx.measureText(text).width + g.yieldFont;
+  const height = g.yieldFont * PHI;
+  ctx.fillStyle = YIELD_BACKGROUND;
+  ctx.beginPath();
+  ctx.roundRect(cx - width / 2, cy - height / 2, width, height, height / 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillText(text, cx, cy + 0.5);
+  ctx.restore();
+}
+
 // Waiting also gets a solid "!" badge (not breathing), so it reads without relying on colour.
 function drawWaitingBadge(ctx: CanvasRenderingContext2D, g: CellGeometry, cx: number, cy: number, scale: number): void {
   const x = cx + Math.cos(g.badgeAngle) * g.badgeDistance * scale;
@@ -135,6 +159,8 @@ export const agentStatus: CellModule = {
   start(onChange) {
     frameRequest = onChange;
     subscribeLens(() => onChange());
+    subscribeSearch(() => onChange());
+    subscribeToggles(() => onChange());
     subscribeLayout((layout) => {
       remember(layout);
       onChange();
@@ -174,6 +200,9 @@ export const agentStatus: CellModule = {
     }
     if (activeLens === "status" && fogged(session)) fillHex(ctx, frame, FOG_COLOUR, FOG.veil);
     if (session.live && session.status === "waiting") drawWaitingBadge(ctx, g, frame.x + frame.width / 2, frame.midY, scale);
+    if (!strategic && isOn("yields") && session.messages > 0) drawYield(ctx, g, frame, session.messages);
+    // Search: everything that does not match fades back under a white veil.
+    if (searchQuery() && !sessionMatches(session)) fillHex(ctx, frame, SEARCH_VEIL, phiFade(1) + phiFade(3));
   },
   describe(cell) {
     const agent = find(cell);

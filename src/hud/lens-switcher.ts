@@ -2,6 +2,7 @@
 import { FOG } from "../cells/golden";
 import { AGENT_COLOURS, lens, LENSES, modelHue, setLens, subscribeLens, type LensId } from "../lens";
 import { currentLayout, subscribeLayout } from "../live";
+import { isOn, setToggle, subscribeToggles } from "../toggles";
 
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA");
@@ -77,17 +78,33 @@ export function startLensSwitcher(root: HTMLElement): void {
     return button;
   });
 
+  // Civ's yield icons: show each cell's message count (key Y).
+  const yields = document.createElement("button");
+  yields.type = "button";
+  yields.className = "hud-lens-toggle";
+  yields.title = "在格子上显示消息数（Y）";
+  yields.textContent = "数字";
+  yields.addEventListener("click", () => setToggle("yields", !isOn("yields")));
+  tabs.append(yields);
+
   const render = () => {
+    yields.setAttribute("aria-pressed", String(isOn("yields")));
     const active = lens();
     for (const button of buttons) button.setAttribute("aria-selected", String(button.dataset.lens === active));
     legend.replaceChildren(...legendFor(active));
   };
   render();
   subscribeLens(render);
+  subscribeToggles(render);
   subscribeLayout(render);
   box.addEventListener("pointerdown", (event) => event.stopPropagation());
   window.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+    if (event.key.toLowerCase() === "y") {
+      event.preventDefault();
+      setToggle("yields", !isOn("yields"));
+      return;
+    }
     const match = LENSES.find((item) => item.key === event.key);
     if (!match) return;
     event.preventDefault();

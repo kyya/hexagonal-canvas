@@ -61,9 +61,14 @@ describe("cell geometry", () => {
     assert.ok(g.badgeDistance > g.iconSize / 2, "badge centre must lie outside the icon's radius");
   });
 
+  test("apothem : yield offset = φ : 1, icon radius : yield font = φ : 1", () => {
+    close(APOTHEM / g.yieldOffset, PHI, "apothem / yield offset");
+    close(g.iconSize / 2 / g.yieldFont, PHI, "icon radius / yield font");
+  });
+
   test("scales with the hex", () => {
     const double = cellGeometry(APOTHEM * 2);
-    for (const key of ["iconSize", "badgeDistance", "badgeRadius", "badgeOutline", "badgeGlyph"] as const) {
+    for (const key of ["iconSize", "badgeDistance", "badgeRadius", "badgeOutline", "badgeGlyph", "yieldOffset", "yieldFont"] as const) {
       close(double[key], g[key] * 2, `${key} at twice the size`);
     }
     close(double.badgeAngle, g.badgeAngle, "badge angle does not scale");

@@ -28,7 +28,17 @@ export type CellDetails = {
   command: string | null;
 };
 
+export type CellForm = {
+  title: string;
+  value: string;
+  placeholder: string;
+  submitLabel: string;
+  onSubmit(value: string): void;
+  onDelete?: () => void;
+};
+
 export type CellMenu = {
+  showForm(form: CellForm): void;
   showDetails(details: CellDetails): void;
   // `live` sessions keep refreshing while the menu is open.
   showTranscript(sessionId: string, live?: boolean): void;
@@ -46,4 +56,6 @@ export type CellModule = {
   // Short description for the hover tooltip.
   describe?(cell: BoardCell): CellDetails | null;
   menu(cell: BoardCell, menu: CellMenu): void;
+  // Right-click on a hex no module occupies; return true if the module opened a menu there.
+  menuEmpty?(col: number, row: number, menu: CellMenu): boolean;
 };
