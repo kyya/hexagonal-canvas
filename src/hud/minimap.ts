@@ -10,6 +10,12 @@ const WIDTH = 208;
 const HEIGHT = Math.round(WIDTH / 1.618033988749895);
 const PAD = 10;
 const STATE_COLOURS = { idle: "#22c55e", busy: "#2563eb", waiting: "#f59e0b" } as const;
+// The map always covers at least this much of the world (about 18 hexes across), so a handful of
+// sessions show as small dots with room around them and the viewport frame stays meaningful.
+const MIN_SPAN_X = 2000;
+const MIN_SPAN_Y = MIN_SPAN_X / 1.618033988749895;
+// Dots never grow past this radius (CSS pixels).
+const MAX_DOT = 5;
 
 export function startMinimap(root: HTMLElement): void {
   const box = document.createElement("div");
@@ -34,10 +40,16 @@ export function startMinimap(root: HTMLElement): void {
     const centres = layout.sessions.map((session) => view().hexCentre(session.col, session.row));
     if (centres.length === 0) return;
     const margin = 120;
-    const minX = Math.min(...centres.map((c) => c.x)) - margin;
-    const maxX = Math.max(...centres.map((c) => c.x)) + margin;
-    const minY = Math.min(...centres.map((c) => c.y)) - margin;
-    const maxY = Math.max(...centres.map((c) => c.y)) + margin;
+    let minX = Math.min(...centres.map((c) => c.x)) - margin;
+    let maxX = Math.max(...centres.map((c) => c.x)) + margin;
+    let minY = Math.min(...centres.map((c) => c.y)) - margin;
+    let maxY = Math.max(...centres.map((c) => c.y)) + margin;
+    const growX = Math.max(0, MIN_SPAN_X - (maxX - minX)) / 2;
+    const growY = Math.max(0, MIN_SPAN_Y - (maxY - minY)) / 2;
+    minX -= growX;
+    maxX += growX;
+    minY -= growY;
+    maxY += growY;
     const scale = Math.min((WIDTH - PAD * 2) / (maxX - minX), (HEIGHT - PAD * 2) / (maxY - minY));
     fit = { minX, minY, scale, offsetX: (WIDTH - (maxX - minX) * scale) / 2, offsetY: (HEIGHT - (maxY - minY) * scale) / 2 };
   };
@@ -52,7 +64,7 @@ export function startMinimap(root: HTMLElement): void {
     lastKey = key;
     ctx.setTransform(2, 0, 0, 2, 0, 0);
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    const radius = Math.max(1.6, 55 * fit.scale);
+    const radius = Math.min(MAX_DOT, Math.max(1.6, 55 * fit.scale));
     for (const session of layout.sessions) {
       const centre = view().hexCentre(session.col, session.row);
       const point = toMap(centre.x, centre.y);
@@ -76,6 +88,8 @@ export function startMinimap(root: HTMLElement): void {
 
   subscribeLayout((next) => {
     layout = next;
+    // Nothing to map yet (the status card explains why).
+    box.hidden = next.sessions.length === 0;
     refit();
     lastKey = "";
     draw();

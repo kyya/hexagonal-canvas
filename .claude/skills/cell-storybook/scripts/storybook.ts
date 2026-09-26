@@ -114,6 +114,8 @@ async function main(): Promise<void> {
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
     await context.addInitScript((value: string) => {
       localStorage.setItem("hexagonal-canvas.camera", value);
+      // Keep the first-visit help panel out of the crops.
+      localStorage.setItem("hexagonal-canvas.help-seen", "1");
     }, JSON.stringify(camera));
     const page = await context.newPage();
     await page.goto(base);

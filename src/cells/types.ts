@@ -31,12 +31,16 @@ export type OverlayFrame = {
   // How far the top of the cell's prism is raised, in (foreshortened) world units; 0 when flat.
   lift(col: number, row: number): number;
   upright(cx: number, cy: number, draw: () => void): void;
+  // Whether a hex (with room for a raised prism) is on screen, so overlays can skip the rest.
+  visible(col: number, row: number): boolean;
 };
 
 export type CellDetails = {
   title: string;
   subtitle: string;
   command: string | null;
+  // The session's project folder, for "copy path" and "open in VS Code".
+  cwd?: string | null;
 };
 
 export type CellForm = {

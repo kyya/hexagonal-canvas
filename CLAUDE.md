@@ -44,3 +44,16 @@ These are deliberate and locked by `src/cells/golden.test.ts`; change them only 
 - **State is shown by tint and breath, not rings.** A live session tints its whole hex and breathes
   (idle still, busy shallow and quick, waiting deep and slow); only waiting adds the "!" badge.
 - Before and after any change to cell drawing, render the storybook and look at the crops.
+
+## Page rules
+
+- **Never leave a blank map unexplained.** Loading, no sessions and an unreachable server each have
+  a card, and a dropped connection shows the reconnecting strip (`src/hud/status.ts`). The server
+  sends a heartbeat every 5 s; the page treats 12 s of silence as a dead connection.
+- **Show agents by name** (`agentName` in `src/agents.ts`), never by their internal slug.
+- **Every gesture and shortcut is listed in the help panel** (`src/hud/help.ts`); add new ones there.
+- **Spare the battery.** Animations that run while nothing changes are throttled (breathing redraws
+  every `BREATH_FRAME_MS`), stop while the tab is hidden and hold still for reduced motion.
+- **Look up cells by position through `placedCellAt`** (an index), not by scanning; overlays skip
+  hexes that are off screen (`frame.visible`). `test/e2e/product.test.ts` checks 2000 sessions.
+- **HUD controls must not overlap** at any window width down to 390 px (checked in the same test).

@@ -70,7 +70,7 @@ describe("yields, search and map pins", () => {
     await input.fill("kimi");
     const results = scene.page.locator(".hud-search-item");
     await eventually("one kimi hit", () => results.count(), (n) => n === 1);
-    assert.match((await results.first().textContent()) ?? "", /历史 Kimi 会话.*kimi · hexagonal/);
+    assert.match((await results.first().textContent()) ?? "", /历史 Kimi 会话.*Kimi Code · hexagonal/);
     assert.equal((await scene.page.locator(".hud-search-count").textContent())?.trim(), "1 个结果");
 
     const kimi = scene.story("history", "kimi");

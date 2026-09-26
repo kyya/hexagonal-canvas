@@ -14,32 +14,45 @@ app.get("/api/transcript", (c) => {
   return c.json(transcript);
 });
 
+// A heartbeat on every stream, so the page can tell a quiet server from a dead one even when a
+// proxy in between (Vite in development) keeps the connection open after the server is gone.
+const HEARTBEAT_MS = 5000;
+
 app.get("/api/sessions/stream", (c) => {
   return streamSSE(c, async (stream) => {
     // Only the newest snapshot matters, so a slow client skips intermediate ones.
     let pending: string | null = snapshot();
+    let beat = false;
     let wake: (() => void) | null = null;
     const unsubscribe = subscribe((data) => {
       pending = data;
       wake?.();
     });
+    const heartbeat = setInterval(() => {
+      beat = true;
+      wake?.();
+    }, HEARTBEAT_MS);
     let closed = false;
     stream.onAbort(() => {
       closed = true;
+      clearInterval(heartbeat);
       unsubscribe();
       wake?.();
     });
     while (!closed) {
-      if (pending === null) {
+      if (pending !== null) {
+        const data: string = pending;
+        pending = null;
+        await stream.writeSSE({ data });
+      } else if (beat) {
+        beat = false;
+        await stream.writeSSE({ event: "ping", data: "" });
+      } else {
         await new Promise<void>((resolve) => {
           wake = resolve;
         });
         wake = null;
-        continue;
       }
-      const data: string = pending;
-      pending = null;
-      await stream.writeSSE({ data });
     }
   });
 });

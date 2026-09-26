@@ -1,10 +1,11 @@
+import { agentName } from "../agents";
 import { agentHexIcon, drawHexIcon, iconReady } from "../icons";
 import { subscribeLayout, type Layout, type LiveSession } from "../live";
 import { armPop, popScale } from "./pop";
 import { fogged, lens, lensTint, subscribeLens } from "../lens";
 import { searchQuery, sessionMatches, subscribeSearch } from "../search";
 import { isOn, subscribeToggles } from "../toggles";
-import { BREATH, breathAlpha, cellGeometry, FADES, FOG, phiFade, prismHeight, safeHalfWidth, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
+import { BREATH, BREATH_FRAME_MS, breathAlpha, cellGeometry, FADES, FOG, phiFade, prismHeight, safeHalfWidth, stillBreath, STRATEGIC_ZOOM, type CellGeometry } from "./golden";
 import { projectHue } from "./palette";
 import type { BoardCell, CellDetails, CellFrame, CellModule } from "./types";
 
@@ -50,15 +51,24 @@ function remember(layout: Layout): void {
   document.title = waiting > 0 ? `(${waiting}) 等你处理 · ${BASE_TITLE}` : BASE_TITLE;
 }
 
-// Busy and waiting cells animate; keep one animation frame queued while any of them is drawn.
-let animationFrame = 0;
+// Busy and waiting cells breathe: while any of them is drawn, queue the next breath frame
+// BREATH_FRAME_MS later (not every display frame, to spare the battery). Nothing is queued while the
+// tab is hidden; the canvas redraws when it is shown again.
+let breathTimer = 0;
+const reducedMotion = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
 function keepAnimating(): void {
-  if (animationFrame !== 0) return;
-  animationFrame = requestAnimationFrame(() => {
-    animationFrame = 0;
-    frameRequest?.();
-  });
+  if (breathTimer !== 0 || document.hidden) return;
+  breathTimer = window.setTimeout(() => {
+    requestAnimationFrame(() => {
+      breathTimer = 0;
+      frameRequest?.();
+    });
+  }, BREATH_FRAME_MS);
 }
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) frameRequest?.();
+});
+reducedMotion?.addEventListener("change", () => frameRequest?.());
 
 function hexPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, side: number): void {
   const rise = side / 2;
@@ -87,9 +97,10 @@ function fillHex(ctx: CanvasRenderingContext2D, frame: CellFrame, colour: string
 function drawStatusBackground(ctx: CanvasRenderingContext2D, frame: CellFrame, session: LiveSession, strategic: boolean, now: number): void {
   const state = session.live ? (session.status ?? "idle") : null;
   if (state) {
-    fillHex(ctx, frame, TINT[state], strategic ? phiFade(1) : breathAlpha(BREATH[state], now));
-    const { min, max } = BREATH[state];
-    if (max > min && !strategic) keepAnimating();
+    const still = strategic || reducedMotion?.matches === true;
+    const breath = BREATH[state];
+    fillHex(ctx, frame, TINT[state], strategic ? phiFade(1) : still ? stillBreath(breath) : breathAlpha(breath, now));
+    if (breath.max > breath.min && !still) keepAnimating();
   } else if (strategic) {
     fillHex(ctx, frame, `hsl(${projectHue(session.cwd)}, 45%, 60%)`, phiFade(3));
   }
@@ -247,8 +258,9 @@ function details(session: LiveSession): CellDetails {
   const origin = parent ? `${session.relation === "fork" ? "分叉自" : "派生自"}「${parent.title}」` : "";
   return {
     title: session.title,
-    subtitle: [session.agent, session.model, status, origin, session.cwd].filter(Boolean).join(" · "),
+    subtitle: [agentName(session.agent), session.model, status, origin, session.cwd].filter(Boolean).join(" · "),
     command: session.resume,
+    cwd: session.cwd || null,
   };
 }
 

@@ -1,4 +1,5 @@
 // Lens switcher (top-left): pick how the map is coloured, keys 1–5, with a legend for the lens.
+import { agentName } from "../agents";
 import { FOG } from "../cells/golden";
 import { AGENT_COLOURS, lens, LENSES, modelHue, setLens, subscribeLens, type LensId } from "../lens";
 import { currentLayout, subscribeLayout } from "../live";
@@ -44,7 +45,7 @@ function legendFor(id: LensId): HTMLElement[] {
     case "recency":
       return [gradient("rgba(124, 58, 237, 0.62)", "rgba(124, 58, 237, 0.08)", "今天", "4 周前")];
     case "agent":
-      return [...new Set(sessions.map((session) => session.agent))].sort().map((agent) => swatch(AGENT_COLOURS[agent] ?? "#6b7280", agent));
+      return [...new Set(sessions.map((session) => session.agent))].sort().map((agent) => swatch(AGENT_COLOURS[agent] ?? "#6b7280", agentName(agent)));
     case "model": {
       const models = [...new Set(sessions.map((session) => session.model).filter((model): model is string => !!model))].sort();
       return models.length > 0 ? models.map((model) => swatch(`hsl(${modelHue(model)}, 60%, 50%)`, model)) : [swatch("#e5e7eb", "没有模型信息")];

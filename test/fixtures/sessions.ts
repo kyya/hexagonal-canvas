@@ -283,6 +283,19 @@ export function writeProject(home: string, cwd: string, firstN: number, prompts:
   });
 }
 
+// A big history: `count` Claude sessions spread over `projects` projects, for performance checks.
+export function writeMany(home: string, firstN: number, count: number, projects = 10): Story[] {
+  const stories: Story[] = [];
+  for (let i = 0; i < count; i++) {
+    const n = firstN + i;
+    const id = uuid(n);
+    const cwd = `/work/project-${i % projects}`;
+    claudeLike(home, ".claude", id, BASE + n * 60_000, `会话 ${i}`, "claude-opus-5-5", cwd);
+    stories.push({ id: `claude:${id}`, agent: "claude", state: "history", label: `会话 ${i}` });
+  }
+  return stories;
+}
+
 // Register a live Claude session for any story (e.g. one from writeProject) in the given state.
 export function registerLiveAs(home: string, story: Story, pid: number, state: LiveStatus, waitingFor?: string): Story {
   const live = { ...story, state, waitingFor };

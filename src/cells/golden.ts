@@ -182,3 +182,12 @@ export const STICKER = {
   shadowOffset: phiFade(4) / PHI,
   shadowAlpha: phiFade(3),
 } as const;
+
+// Breathing is slow (periods of φ and φ² seconds), so it is redrawn at about 18 frames a second
+// (one frame per φ⁶ ms ≈ 56 ms) instead of every display frame, and not at all while the tab is
+// hidden or the viewer prefers reduced motion (tints then hold the middle of their breath).
+export const BREATH_FRAME_MS = 1000 / PHI ** 6;
+
+export function stillBreath(breath: Breath): number {
+  return (breath.min + breath.max) / 2;
+}

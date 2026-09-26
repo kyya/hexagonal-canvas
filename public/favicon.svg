@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Three hexes of the map: idle green, working blue, waiting amber. -->
+  <g stroke="#fff" stroke-width="2" stroke-linejoin="round">
+    <path d="M20 6 34 14v16l-14 8-14-8V14z" fill="#22c55e"/>
+    <path d="M44 6 58 14v16l-14 8-14-8V14z" fill="#2563eb"/>
+    <path d="M32 26 46 34v16l-14 8-14-8V34z" fill="#f59e0b"/>
+  </g>
+</svg>

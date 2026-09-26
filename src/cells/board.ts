@@ -16,16 +16,39 @@ export function startCells(onFrame: () => void): void {
   for (const module of modules) module.start(onFrame);
 }
 
-export function placedCells(): PlacedCell[] {
-  return modules.flatMap((module) => module.cells().map((cell) => ({ module, cell })));
+// Every placed cell, and an index by position, rebuilt only when a module hands out a new cell list
+// (modules replace their arrays on change), so hovering and drawing thousands of sessions stays O(1)
+// per lookup instead of scanning every cell.
+type Placement = { sources: BoardCell[][]; list: PlacedCell[]; byPosition: Map<string, PlacedCell> };
+let placement: Placement | null = null;
+
+function currentPlacement(): Placement {
+  const sources = modules.map((module) => module.cells());
+  if (placement && sources.every((cells, index) => cells === placement?.sources[index])) return placement;
+  const list: PlacedCell[] = [];
+  const byPosition = new Map<string, PlacedCell>();
+  sources.forEach((cells, index) => {
+    const module = modules[index];
+    if (!module) return;
+    for (const cell of cells) {
+      const placed = { module, cell };
+      list.push(placed);
+      // Earlier modules win a shared hex, as before.
+      const key = `${cell.col},${cell.row}`;
+      if (!byPosition.has(key)) byPosition.set(key, placed);
+    }
+  });
+  placement = { sources, list, byPosition };
+  return placement;
+}
+
+// Shared between callers: copy before sorting or otherwise changing it.
+export function placedCells(): readonly PlacedCell[] {
+  return currentPlacement().list;
 }
 
 export function placedCellAt(col: number, row: number): PlacedCell | null {
-  for (const module of modules) {
-    const cell = module.cells().find((item) => item.col === col && item.row === row);
-    if (cell) return { module, cell };
-  }
-  return null;
+  return currentPlacement().byPosition.get(`${col},${row}`) ?? null;
 }
 
 export function drawPlacedCell(placed: PlacedCell, frame: CellFrame): void {

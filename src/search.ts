@@ -1,4 +1,5 @@
 // Map search: a query dims every session and pin that does not match, and lists the hits.
+import { agentName } from "./agents.ts";
 import type { LiveSession } from "./live";
 import type { Pin } from "./pins";
 
@@ -29,7 +30,7 @@ export function subscribeSearch(listener: () => void): () => void {
 
 export function sessionMatches(session: LiveSession, text = query): boolean {
   if (!text) return true;
-  return [session.title, session.cwd, session.agent, session.model ?? ""].some((field) => field.toLowerCase().includes(text));
+  return [session.title, session.cwd, session.agent, agentName(session.agent), session.model ?? ""].some((field) => field.toLowerCase().includes(text));
 }
 
 export function pinMatches(pin: Pin, text = query): boolean {

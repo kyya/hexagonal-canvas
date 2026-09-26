@@ -41,6 +41,7 @@ function drawBorders(frame: OverlayFrame, sessions: LiveSession[]): void {
   ctx.lineWidth = Math.max(BORDER_WIDTH, (BORDER_WIDTH * 0.6) / frame.zoom);
   ctx.lineCap = "round";
   for (const session of sessions) {
+    if (!frame.visible(session.col, session.row)) continue;
     const project = session.cwd || "";
     const { x, y } = frame.origin(session.col, session.row);
     const corners: [number, number][] = [
@@ -89,6 +90,9 @@ function drawBanners(frame: OverlayFrame): void {
   ctx.save();
   ctx.textBaseline = "middle";
   for (const label of layout.labels) {
+    // The banner hangs above its hex and can be wider than it: keep it while the hex or its
+    // neighbours are near the screen.
+    if (!frame.visible(label.col, label.row) && !frame.visible(label.col, label.row + 1)) continue;
     const hue = projectHue(label.cwd);
     ctx.font = `600 ${font}px ui-sans-serif, system-ui, sans-serif`;
     const nameWidth = ctx.measureText(label.name).width;

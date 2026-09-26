@@ -1,9 +1,8 @@
 # <p align="center">Hexagonal Canvas</p>
 
-![Hexagonal](./assets/hexagonal.png)
+<p align="center">本机 agent 会话地图 — every coding-agent session on this machine, on one hex map.</p>
 
-Created with CodeSandbox
-[DEMO](https://z660b.csb.app/)
+![Hexagonal](./assets/hexagonal.png)
 
 ## Development
 
@@ -35,6 +34,14 @@ this machine and puts one on each hex, grouped by project. A running session tin
 breathes: still pale green when idle, shallow quick blue breaths while working, deep slow amber
 breaths when it is waiting on you. Agent icons look like stickers — a white die-cut border and a soft shadow. Past sessions are faded. Right-click a hex for its title, model, a copyable resume
 command and the whole conversation.
+
+### Getting started
+
+Open the page and a short help panel explains the map (press `?` or the ? button any time). If
+no session is found yet, a card lists the supported agents; if the local server is not running, a
+card says how to start it (`pnpm dev`), and a strip at the top shows while a dropped connection
+reconnects. Right-click a session for its details; the menu opens beside the cell and can copy the
+project path or open it in VS Code.
 
 ### Finding your way
 
